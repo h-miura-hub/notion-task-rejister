@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タスク登録</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --border: #e2e0d8;
+    --border-focus: #a0a090;
+    --text: #1a1a18;
+    --text-sub: #6b6b60;
+    --text-hint: #a8a89a;
+    --accent: #2d6a4f;
+    --accent-light: #e8f5ee;
+    --accent-border: #74c69d;
+    --proj-bg: #eeedfe;
+    --proj-text: #3c3489;
+    --danger: #c94040;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --radius-pill: 20px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 24px 16px 60px;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .header {
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+
+  .header p {
+    font-size: 12px;
+    color: var(--text-hint);
+    margin-top: 3px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 12px;
+  }
+
+  .field-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  /* 案件検索 */
+  .search-wrap { position: relative; }
+
+  .search-input {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-input:focus { border-color: var(--border-focus); }
+  .search-input::placeholder { color: var(--text-hint); }
+
+  .suggestions {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+
+  .sug-item {
+    padding: 10px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s;
+    color: var(--text);
+  }
+
+  .sug-item:hover { background: var(--bg); }
+  .sug-item strong { color: var(--accent); font-weight: 700; }
+
+  .sug-empty {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-hint);
+  }
+
+  .selected-chip {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: var(--proj-bg);
+    color: var(--proj-text);
+    border-radius: var(--radius-pill);
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 8px;
+    width: fit-content;
+  }
+
+  .selected-chip button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--proj-text);
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.7;
+  }
+
+  .selected-chip button:hover { opacity: 1; }
+
+  /* 種別ボタン */
+  .type-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .type-btn {
+    padding: 7px 14px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--bg);
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .type-btn:hover { border-color: var(--border-focus); color: var(--text); }
+
+  .type-btn.active {
+    background: var(--accent-light);
+    border-color: var(--accent-border);
+    color: var(--accent);
+  }
+
+  /* タスク内容 */
+  .task-input {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+    resize: none;
+  }
+
+  .task-input:focus { border-color: var(--border-focus); }
+  .task-input::placeholder { color: var(--text-hint); }
+
+  /* プレビュー */
+  .preview {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-top: 10px;
+  }
+
+  .preview-label {
+    font-size: 10px;
+    color: var(--text-hint);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .preview-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    min-height: 20px;
+  }
+
+  .preview-name.empty { color: var(--text-hint); font-weight: 400; }
+
+  /* 期日 */
+  .date-input {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .date-input:focus { border-color: var(--border-focus); }
+
+  /* 登録ボタン */
+  .submit-btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 15px;
+    font-family: inherit;
+    font-weight: 700;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.3px;
+  }
+
+  .submit-btn:hover:not(:disabled) { opacity: 0.88; }
+  .submit-btn:active:not(:disabled) { transform: scale(0.98); }
+
+  .submit-btn:disabled {
+    background: var(--border);
+    color: var(--text-hint);
+    cursor: not-allowed;
+  }
+
+  /* トースト */
+  .toast {
+    display: none;
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: var(--radius-pill);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    z-index: 999;
+    animation: fadeup 0.2s ease;
+  }
+
+  .toast.error { background: var(--danger); }
+
+  @keyframes fadeup {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  /* 直近履歴 */
+  .history-list { display: flex; flex-direction: column; gap: 0; }
+
+  .h-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .h-item:last-child { border-bottom: none; }
+  .h-name { flex: 1; color: var(--text); line-height: 1.4; }
+  .h-date { color: var(--text-hint); white-space: nowrap; }
+  .h-empty { font-size: 12px; color: var(--text-hint); }
+
+  /* ローディング */
+  .loading {
+    display: none;
+    font-size: 12px;
+    color: var(--text-hint);
+    margin-top: 6px;
+  }
+
+  /* 設定エリア */
+  .config-toggle {
+    font-size: 12px;
+    color: var(--text-hint);
+    cursor: pointer;
+    text-align: center;
+    margin-bottom: 12px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .config-area {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+
+  .config-area .field-label { margin-bottom: 6px; }
+
+  .config-input {
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    margin-bottom: 10px;
+  }
+
+  .config-input:focus { border-color: var(--border-focus); }
+
+  .config-save {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    background: var(--text);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>タスク登録</h1>
+    <p>Notion に直接登録します</p>
+  </div>
+
+  <!-- 設定（折りたたみ） -->
+  <div class="config-toggle" onclick="toggleConfig()">⚙ API設定</div>
+  <div class="config-area" id="config-area">
+    <div class="field-label">タスクDB ID</div>
+    <input class="config-input" id="cfg-task-db" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    <div class="field-label">プロジェクトDB ID</div>
+    <input class="config-input" id="cfg-proj-db" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    <button class="config-save" onclick="saveConfig()">保存</button>
+  </div>
+
+  <!-- 案件検索 -->
+  <div class="card">
+    <div class="field-label">案件</div>
+    <div class="search-wrap">
+      <input class="search-input" id="proj-search" type="text"
+        placeholder="案件名を入力して検索..."
+        oninput="onSearchInput(this.value)"
+        autocomplete="off">
+      <div class="suggestions" id="suggestions"></div>
+    </div>
+    <div class="selected-chip" id="selected-chip">
+      <span id="selected-proj-name"></span>
+      <button onclick="clearProject()">×</button>
+    </div>
+    <div class="loading" id="proj-loading">読み込み中...</div>
+  </div>
+
+  <!-- タスク内容 -->
+  <div class="card">
+    <div class="field-label">タスク内容</div>
+    <div class="type-grid" id="type-grid"></div>
+    <textarea class="task-input" id="task-content" rows="2"
+      placeholder="内容を入力、またはボタンで選択..."
+      oninput="updatePreview()" style="margin-top:10px;"></textarea>
+    <div class="preview">
+      <div class="preview-label">Notionに登録されるタスク名</div>
+      <div class="preview-name empty" id="preview-name">案件と内容を入力してください</div>
+    </div>
+  </div>
+
+  <!-- 期日 -->
+  <div class="card">
+    <div class="field-label">期日（任意）</div>
+    <input class="date-input" id="task-date" type="date">
+  </div>
+
+  <!-- 登録ボタン -->
+  <button class="submit-btn" id="submit-btn" onclick="submitTask()" disabled>
+    Notion に登録する
+  </button>
+
+  <!-- 履歴 -->
+  <div class="card" style="margin-top:16px;">
+    <div class="field-label" style="margin-bottom:10px;">直近の登録</div>
+    <div class="history-list" id="history-list">
+      <div class="h-empty">まだ登録がありません</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== 設定 =====
+const CONFIG = {
+  workerUrl: 'https://notion-proxy.h-miura.workers.dev',
+  taskDb:  localStorage.getItem('notion_task_db') || '',
+  projDb:  localStorage.getItem('notion_proj_db') || '',
+};
+
+const TASK_TYPES = ['催促','電話','書面作成','資料送付','MTG準備','確認・承認','見積作成','契約書対応'];
+
+// ===== 状態 =====
+let selectedProject = null; // { id, name }
+let allProjects = [];
+let history = [];
+
+// ===== 初期化 =====
+function init() {
+  const grid = document.getElementById('type-grid');
+  if (grid) {
+    TASK_TYPES.forEach(t => {
+      const b = document.createElement('button');
+      b.className = 'type-btn';
+      b.textContent = t;
+      b.onclick = () => onTypeClick(t, b);
+      grid.appendChild(b);
+    });
+  }
+
+  const cfgTask = document.getElementById('cfg-task-db');
+  const cfgProj = document.getElementById('cfg-proj-db');
+  if (cfgTask) cfgTask.value = CONFIG.taskDb;
+  if (cfgProj) cfgProj.value = CONFIG.projDb;
+
+  if (CONFIG.taskDb && CONFIG.projDb) fetchProjects();
+}
+
+// ===== 設定 =====
+function toggleConfig() {
+  const el = document.getElementById('config-area');
+  if (!el) return;
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+function saveConfig() {
+  CONFIG.taskDb = document.getElementById('cfg-task-db').value.trim();
+  CONFIG.projDb = document.getElementById('cfg-proj-db').value.trim();
+  localStorage.setItem('notion_task_db', CONFIG.taskDb);
+  localStorage.setItem('notion_proj_db', CONFIG.projDb);
+  const configArea = document.getElementById('config-area');
+  if (configArea) configArea.style.display = 'none';
+  showToast('設定を保存しました');
+  if (CONFIG.taskDb && CONFIG.projDb) fetchProjects();
+}
+
+// ===== プロジェクト取得 =====
+async function fetchProjects() {
+  if (!CONFIG.projDb) return;
+  const loadingEl = document.getElementById('proj-loading');
+  if (loadingEl) loadingEl.style.display = 'block';
+  try {
+    let results = [];
+    let cursor = undefined;
+    while (true) {
+      const body = { page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
+      const res = await notionRequest(
+        `https://api.notion.com/v1/databases/${CONFIG.projDb}/query`,
+        'POST', body
+      );
+      results = results.concat(res.results);
+      if (!res.has_more) break;
+      cursor = res.next_cursor;
+    }
+    allProjects = results.map(p => ({
+      id: p.id,
+      name: p.properties?.['名前']?.title?.[0]?.plain_text
+         || p.properties?.['Name']?.title?.[0]?.plain_text
+         || p.properties?.['プロジェクト名']?.title?.[0]?.plain_text
+         || '（名称なし）'
+    })).filter(p => p.name !== '（名称なし）').sort((a,b) => a.name.localeCompare(b.name));
+  } catch(e) {
+    showToast('プロジェクト取得に失敗しました: ' + e.message, true);
+  }
+  if (loadingEl) loadingEl.style.display = 'none';
+}
+
+// ===== 案件検索 =====
+function onSearchInput(val) {
+  const box = document.getElementById('suggestions');
+  if (!box) return;
+  if (!val.trim()) { box.style.display = 'none'; return; }
+  const hits = allProjects.filter(p => p.name.includes(val)).slice(0, 8);
+  if (!hits.length) {
+    box.innerHTML = '<div class="sug-empty">見つかりません</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = hits.map(p => {
+    const idx = p.name.indexOf(val);
+    const hi = p.name.slice(0,idx)
+      + '<strong>' + p.name.slice(idx, idx+val.length) + '</strong>'
+      + p.name.slice(idx+val.length);
+    return `<div class="sug-item" onclick="selectProject('${p.id}','${p.name.replace(/'/g,"\\'")}')">` + hi + `</div>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function selectProject(id, name) {
+  selectedProject = { id, name };
+  const search = document.getElementById('proj-search');
+  const sug = document.getElementById('suggestions');
+  const chipName = document.getElementById('selected-proj-name');
+  const chip = document.getElementById('selected-chip');
+  if (search) search.value = '';
+  if (sug) sug.style.display = 'none';
+  if (chipName) chipName.textContent = name;
+  if (chip) chip.style.display = 'flex';
+  updatePreview();
+}
+
+function clearProject() {
+  selectedProject = null;
+  const chip = document.getElementById('selected-chip');
+  if (chip) chip.style.display = 'none';
+  updatePreview();
+}
+
+// クリック外で閉じる
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) {
+    const sug = document.getElementById('suggestions');
+    if (sug) sug.style.display = 'none';
+  }
+});
+
+// ===== 種別ボタン =====
+function onTypeClick(text, btn) {
+  const input = document.getElementById('task-content');
+  const isActive = btn.classList.contains('active');
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  if (isActive) {
+    input.value = '';
+  } else {
+    btn.classList.add('active');
+    input.value = text;
+    input.focus();
+    // カーソルを末尾へ
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+  updatePreview();
+}
+
+// ===== プレビュー =====
+function updatePreview() {
+  const contentEl = document.getElementById('task-content');
+  const el = document.getElementById('preview-name');
+  if (!contentEl || !el) return;
+  const content = contentEl.value.trim();
+  if (selectedProject && content) {
+    el.textContent = `${selectedProject.name} / ${content}`;
+    el.classList.remove('empty');
+  } else if (selectedProject) {
+    el.textContent = `${selectedProject.name} / （内容を入力）`;
+    el.classList.add('empty');
+  } else if (content) {
+    el.textContent = `（案件未選択） / ${content}`;
+    el.classList.add('empty');
+  } else {
+    el.textContent = '案件と内容を入力してください';
+    el.classList.add('empty');
+  }
+  checkReady();
+}
+
+function checkReady() {
+  const contentEl = document.getElementById('task-content');
+  const btn = document.getElementById('submit-btn');
+  if (!contentEl || !btn) return;
+  const content = contentEl.value.trim();
+  btn.disabled = !(selectedProject && content);
+}
+
+// ===== 登録 =====
+async function submitTask() {
+  if (!CONFIG.taskDb) {
+    showToast('API設定を入力してください', true);
+    toggleConfig();
+    return;
+  }
+  const content = document.getElementById('task-content').value.trim();
+  const taskName = `${selectedProject.name} / ${content}`;
+  const dateVal  = document.getElementById('task-date').value;
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+
+  try {
+    const props = {
+      'タスク名': { title: [{ text: { content: taskName } }] },
+    };
+
+    // リレーション
+    if (selectedProject?.id) {
+      props['プロジェクト'] = { relation: [{ id: selectedProject.id }] };
+    }
+
+    // 期日
+    if (dateVal) {
+      props['期日'] = { date: { start: dateVal } };
+    }
+
+    await notionRequest(
+      `https://api.notion.com/v1/pages`,
+      'POST',
+      { parent: { database_id: CONFIG.taskDb }, properties: props }
+    );
+
+    // 履歴に追加
+    const now = new Date();
+    const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+    history.unshift({ name: taskName, time: timeStr });
+    renderHistory();
+
+    showToast('登録しました');
+
+    // リセット
+    document.getElementById('task-content').value = '';
+    document.getElementById('task-date').value = '';
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    clearProject();
+
+  } catch(e) {
+    showToast('登録に失敗: ' + e.message, true);
+  }
+
+  btn.textContent = 'Notion に登録する';
+  checkReady();
+}
+
+// ===== Notion APIリクエスト（Cloudflare Workers経由） =====
+async function notionRequest(url, method, body) {
+  const path = url.replace('https://api.notion.com', '');
+  const res = await fetch(CONFIG.workerUrl + path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ===== 履歴描画 =====
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  if (!history.length) {
+    el.innerHTML = '<div class="h-empty">まだ登録がありません</div>';
+    return;
+  }
+  el.innerHTML = history.slice(0, 5).map(h =>
+    `<div class="h-item">
+      <span class="h-name">${h.name}</span>
+      <span class="h-date">${h.time}</span>
+    </div>`
+  ).join('');
+}
+
+// ===== トースト =====
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 2800);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
