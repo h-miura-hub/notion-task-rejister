@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>タスク登録</title>
+<title>タスク・進捗登録</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -18,6 +18,9 @@
     --accent: #2d6a4f;
     --accent-light: #e8f5ee;
     --accent-border: #74c69d;
+    --accent2: #2c5282;
+    --accent2-light: #ebf1fa;
+    --accent2-border: #74a8d6;
     --proj-bg: #eeedfe;
     --proj-text: #3c3489;
     --danger: #c94040;
@@ -78,6 +81,25 @@
     margin-bottom: 8px;
   }
 
+  /* セクション見出し */
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .section-title .icon { font-size: 16px; }
+
+  .section-divider {
+    margin: 28px 0 20px;
+  }
+
   /* 案件検索 */
   .search-wrap { position: relative; }
 
@@ -108,6 +130,8 @@
     overflow: hidden;
     z-index: 100;
     box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    max-height: 240px;
+    overflow-y: auto;
   }
 
   .sug-item {
@@ -266,6 +290,10 @@
     cursor: not-allowed;
   }
 
+  .submit-btn.btn-history {
+    background: var(--accent2);
+  }
+
   /* トースト */
   .toast {
     display: none;
@@ -306,6 +334,15 @@
   .h-item:last-child { border-bottom: none; }
   .h-name { flex: 1; color: var(--text); line-height: 1.4; }
   .h-date { color: var(--text-hint); white-space: nowrap; }
+  .h-badge {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .h-badge.task { background: var(--accent-light); color: var(--accent); }
+  .h-badge.progress { background: var(--accent2-light); color: var(--accent2); }
   .h-empty { font-size: 12px; color: var(--text-hint); }
 
   /* ローディング */
@@ -370,7 +407,7 @@
 <div class="container">
 
   <div class="header">
-    <h1>タスク登録</h1>
+    <h1>タスク・進捗登録</h1>
     <p>Notion に直接登録します</p>
   </div>
 
@@ -381,12 +418,14 @@
     <input class="config-input" id="cfg-task-db" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
     <div class="field-label">プロジェクトDB ID</div>
     <input class="config-input" id="cfg-proj-db" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    <div class="field-label">進捗履歴DB ID</div>
+    <input class="config-input" id="cfg-history-db" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
     <button class="config-save" onclick="saveConfig()">保存</button>
   </div>
 
-  <!-- 案件検索 -->
+  <!-- ==================== 共通：案件選択 ==================== -->
   <div class="card">
-    <div class="field-label">案件</div>
+    <div class="field-label">案件（共通）</div>
     <div class="search-wrap">
       <input class="search-input" id="proj-search" type="text"
         placeholder="案件名を入力して検索..."
@@ -400,6 +439,9 @@
     </div>
     <div class="loading" id="proj-loading">読み込み中...</div>
   </div>
+
+  <!-- ==================== タスク登録 ==================== -->
+  <div class="section-title"><span class="icon">✏️</span> タスク登録</div>
 
   <!-- タスク内容 -->
   <div class="card">
@@ -420,12 +462,29 @@
     <input class="date-input" id="task-date" type="date">
   </div>
 
-  <!-- 登録ボタン -->
+  <!-- タスク登録ボタン -->
   <button class="submit-btn" id="submit-btn" onclick="submitTask()" disabled>
-    Notion に登録する
+    タスクを Notion に登録する
   </button>
 
-  <!-- 履歴 -->
+  <!-- ==================== 進捗履歴登録 ==================== -->
+  <div class="section-divider"></div>
+  <div class="section-title"><span class="icon">📋</span> 進捗履歴登録</div>
+
+  <!-- 進捗内容 -->
+  <div class="card">
+    <div class="field-label">進捗内容</div>
+    <textarea class="task-input" id="hist-content" rows="3"
+      placeholder="進捗の内容を入力..."
+      oninput="checkHistReady()"></textarea>
+  </div>
+
+  <!-- 進捗登録ボタン -->
+  <button class="submit-btn btn-history" id="hist-submit-btn" onclick="submitHistory()" disabled>
+    進捗履歴を Notion に登録する
+  </button>
+
+  <!-- 直近の登録履歴 -->
   <div class="card" style="margin-top:16px;">
     <div class="field-label" style="margin-bottom:10px;">直近の登録</div>
     <div class="history-list" id="history-list">
@@ -441,16 +500,17 @@
 // ===== 設定 =====
 const CONFIG = {
   workerUrl: 'https://notion-proxy.h-miura.workers.dev',
-  taskDb:  localStorage.getItem('notion_task_db') || '',
-  projDb:  localStorage.getItem('notion_proj_db') || '',
+  taskDb:    localStorage.getItem('notion_task_db') || '',
+  projDb:    localStorage.getItem('notion_proj_db') || '',
+  historyDb: localStorage.getItem('notion_history_db') || '',
 };
 
 const TASK_TYPES = ['催促','電話','書面作成','資料送付','MTG準備','確認・承認','見積作成','契約書対応'];
 
 // ===== 状態 =====
-let selectedProject = null; // { id, name }
+let selectedProject = null; // 共通の案件選択
 let allProjects = [];
-let history = [];
+let recentHistory = [];
 
 // ===== 初期化 =====
 function init() {
@@ -467,10 +527,12 @@ function init() {
 
   const cfgTask = document.getElementById('cfg-task-db');
   const cfgProj = document.getElementById('cfg-proj-db');
+  const cfgHist = document.getElementById('cfg-history-db');
   if (cfgTask) cfgTask.value = CONFIG.taskDb;
   if (cfgProj) cfgProj.value = CONFIG.projDb;
+  if (cfgHist) cfgHist.value = CONFIG.historyDb;
 
-  if (CONFIG.taskDb && CONFIG.projDb) fetchProjects();
+  if (CONFIG.projDb) fetchProjects();
 }
 
 // ===== 設定 =====
@@ -481,17 +543,19 @@ function toggleConfig() {
 }
 
 function saveConfig() {
-  CONFIG.taskDb = document.getElementById('cfg-task-db').value.trim();
-  CONFIG.projDb = document.getElementById('cfg-proj-db').value.trim();
+  CONFIG.taskDb    = document.getElementById('cfg-task-db').value.trim();
+  CONFIG.projDb    = document.getElementById('cfg-proj-db').value.trim();
+  CONFIG.historyDb = document.getElementById('cfg-history-db').value.trim();
   localStorage.setItem('notion_task_db', CONFIG.taskDb);
   localStorage.setItem('notion_proj_db', CONFIG.projDb);
+  localStorage.setItem('notion_history_db', CONFIG.historyDb);
   const configArea = document.getElementById('config-area');
   if (configArea) configArea.style.display = 'none';
   showToast('設定を保存しました');
-  if (CONFIG.taskDb && CONFIG.projDb) fetchProjects();
+  if (CONFIG.projDb) fetchProjects();
 }
 
-// ===== プロジェクト取得 =====
+// ===== プロジェクト取得（ステータスフィルタ付き） =====
 async function fetchProjects() {
   if (!CONFIG.projDb) return;
   const loadingEl = document.getElementById('proj-loading');
@@ -500,7 +564,15 @@ async function fetchProjects() {
     let results = [];
     let cursor = undefined;
     while (true) {
-      const body = { page_size: 100 };
+      const body = {
+        page_size: 100,
+        filter: {
+          or: [
+            { property: 'ステータス', status: { equals: '未着手' } },
+            { property: 'ステータス', status: { equals: '進行中' } }
+          ]
+        }
+      };
       if (cursor) body.start_cursor = cursor;
       const res = await notionRequest(
         `https://api.notion.com/v1/databases/${CONFIG.projDb}/query`,
@@ -523,7 +595,7 @@ async function fetchProjects() {
   if (loadingEl) loadingEl.style.display = 'none';
 }
 
-// ===== 案件検索 =====
+// ===== 共通：案件検索 =====
 function onSearchInput(val) {
   const box = document.getElementById('suggestions');
   if (!box) return;
@@ -555,6 +627,7 @@ function selectProject(id, name) {
   if (chipName) chipName.textContent = name;
   if (chip) chip.style.display = 'flex';
   updatePreview();
+  checkHistReady();
 }
 
 function clearProject() {
@@ -562,6 +635,7 @@ function clearProject() {
   const chip = document.getElementById('selected-chip');
   if (chip) chip.style.display = 'none';
   updatePreview();
+  checkHistReady();
 }
 
 // クリック外で閉じる
@@ -583,7 +657,6 @@ function onTypeClick(text, btn) {
     btn.classList.add('active');
     input.value = text;
     input.focus();
-    // カーソルを末尾へ
     input.setSelectionRange(input.value.length, input.value.length);
   }
   updatePreview();
@@ -619,7 +692,15 @@ function checkReady() {
   btn.disabled = !(selectedProject && content);
 }
 
-// ===== 登録 =====
+function checkHistReady() {
+  const contentEl = document.getElementById('hist-content');
+  const btn = document.getElementById('hist-submit-btn');
+  if (!contentEl || !btn) return;
+  const content = contentEl.value.trim();
+  btn.disabled = !(selectedProject && content);
+}
+
+// ===== タスク登録 =====
 async function submitTask() {
   if (!CONFIG.taskDb) {
     showToast('API設定を入力してください', true);
@@ -639,12 +720,10 @@ async function submitTask() {
       'タスク名': { title: [{ text: { content: taskName } }] },
     };
 
-    // リレーション
     if (selectedProject?.id) {
       props['プロジェクト'] = { relation: [{ id: selectedProject.id }] };
     }
 
-    // 期日
     if (dateVal) {
       props['期日'] = { date: { start: dateVal } };
     }
@@ -655,26 +734,77 @@ async function submitTask() {
       { parent: { database_id: CONFIG.taskDb }, properties: props }
     );
 
-    // 履歴に追加
     const now = new Date();
     const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
-    history.unshift({ name: taskName, time: timeStr });
+    recentHistory.unshift({ name: taskName, time: timeStr, type: 'task' });
     renderHistory();
 
-    showToast('登録しました');
+    showToast('タスクを登録しました');
 
-    // リセット
+    // タスク入力のみリセット（案件は維持）
     document.getElementById('task-content').value = '';
     document.getElementById('task-date').value = '';
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
-    clearProject();
+    updatePreview();
 
   } catch(e) {
     showToast('登録に失敗: ' + e.message, true);
   }
 
-  btn.textContent = 'Notion に登録する';
+  btn.textContent = 'タスクを Notion に登録する';
   checkReady();
+}
+
+// ===== 進捗履歴登録 =====
+async function submitHistory() {
+  if (!CONFIG.historyDb) {
+    showToast('進捗履歴DB IDを設定してください', true);
+    toggleConfig();
+    return;
+  }
+  const content = document.getElementById('hist-content').value.trim();
+
+  const btn = document.getElementById('hist-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+
+  try {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+    const props = {
+      '進捗履歴': { title: [{ text: { content: content } }] },
+      '作成日': { date: { start: dateStr } },
+    };
+
+    if (selectedProject?.id) {
+      props['プロジェクト'] = { relation: [{ id: selectedProject.id }] };
+    }
+
+    await notionRequest(
+      `https://api.notion.com/v1/pages`,
+      'POST',
+      { parent: { database_id: CONFIG.historyDb }, properties: props }
+    );
+
+    const now = new Date();
+    const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const displayName = `${selectedProject.name} / ${content}`;
+    recentHistory.unshift({ name: displayName, time: timeStr, type: 'progress' });
+    renderHistory();
+
+    showToast('進捗履歴を登録しました');
+
+    // 進捗入力のみリセット（案件は維持）
+    document.getElementById('hist-content').value = '';
+    checkHistReady();
+
+  } catch(e) {
+    showToast('登録に失敗: ' + e.message, true);
+  }
+
+  btn.textContent = '進捗履歴を Notion に登録する';
+  checkHistReady();
 }
 
 // ===== Notion APIリクエスト（Cloudflare Workers経由） =====
@@ -697,16 +827,19 @@ async function notionRequest(url, method, body) {
 // ===== 履歴描画 =====
 function renderHistory() {
   const el = document.getElementById('history-list');
-  if (!history.length) {
+  if (!recentHistory.length) {
     el.innerHTML = '<div class="h-empty">まだ登録がありません</div>';
     return;
   }
-  el.innerHTML = history.slice(0, 5).map(h =>
-    `<div class="h-item">
+  el.innerHTML = recentHistory.slice(0, 8).map(h => {
+    const badgeClass = h.type === 'task' ? 'task' : 'progress';
+    const badgeLabel = h.type === 'task' ? 'タスク' : '進捗';
+    return `<div class="h-item">
+      <span class="h-badge ${badgeClass}">${badgeLabel}</span>
       <span class="h-name">${h.name}</span>
       <span class="h-date">${h.time}</span>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 }
 
 // ===== トースト =====
