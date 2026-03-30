@@ -396,10 +396,16 @@ function capture() {
   const video = document.getElementById('video');
   if (!video) return;
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  capturedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+  // 画像を小さく圧縮して送信サイズを抑える
+  const MAX_SIZE = 1200;
+  let w = video.videoWidth;
+  let h = video.videoHeight;
+  if (w > h && w > MAX_SIZE) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+  else if (h > MAX_SIZE) { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  capturedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
   capturedImageBase64 = capturedDataUrl.split(',')[1];
   if (currentStream) currentStream.getTracks().forEach(t => t.stop());
   const img = document.getElementById('preview-img');
@@ -417,15 +423,28 @@ function handleFileSelect(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(ev) {
-    capturedDataUrl = ev.target.result;
-    capturedImageBase64 = capturedDataUrl.split(',')[1];
-    if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-    const img = document.getElementById('preview-img');
-    if (img) img.src = capturedDataUrl;
-    showScreen('preview');
+    // ギャラリーからの画像も圧縮する
+    const tempImg = new Image();
+    tempImg.onload = function() {
+      const canvas = document.createElement('canvas');
+      const MAX_SIZE = 1200;
+      let w = tempImg.width;
+      let h = tempImg.height;
+      if (w > h && w > MAX_SIZE) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+      else if (h > MAX_SIZE) { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+      capturedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      capturedImageBase64 = capturedDataUrl.split(',')[1];
+      if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+      const img = document.getElementById('preview-img');
+      if (img) img.src = capturedDataUrl;
+      showScreen('preview');
+    };
+    tempImg.src = ev.target.result;
   };
   reader.readAsDataURL(file);
-  // reset so same file can be picked again
   e.target.value = '';
 }
 
@@ -443,58 +462,148 @@ function parseBusinessCard(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
   const card = { name: '', company: '', email: '', phone: '' };
 
-  // メールアドレスを探す
+  // --- メールアドレスを探す ---
   for (const line of lines) {
     const emailMatch = line.match(/[\w.\-+]+@[\w.\-]+\.\w+/);
     if (emailMatch) {
       card.email = emailMatch[0];
+      break;
     }
   }
 
-  // 電話番号を探す（日本の形式）
+  // --- 電話番号を探す ---
   for (const line of lines) {
-    const phoneMatch = line.match(/(?:TEL|Tel|tel|Phone|phone|携帯|電話)?[:\s]*((?:\+81|0)[\d\-().（）\s]{8,})/);
+    // TEL/電話の後の番号を優先
+    const phoneMatch = line.match(/(?:TEL|Tel|tel|Phone|phone|携帯|電話|直通)[:\s：]*((?:\+81|0)[\d\-().（）\s]{8,})/);
     if (phoneMatch) {
       card.phone = phoneMatch[1].replace(/[\s()（）]/g, '');
       break;
     }
-    // 番号だけのパターン
-    const numMatch = line.match(/(0\d{1,4}[\-]\d{1,4}[\-]\d{3,4})/);
-    if (numMatch && !card.phone) {
-      card.phone = numMatch[1];
+  }
+  // TELラベルなしの番号
+  if (!card.phone) {
+    for (const line of lines) {
+      const numMatch = line.match(/(0\d{1,4}[\-]\d{1,4}[\-]\d{3,4})/);
+      if (numMatch) {
+        card.phone = numMatch[1];
+        break;
+      }
     }
   }
 
-  // 会社名を探す（株式会社、合同会社、有限会社などを含む行）
+  // --- 肩書き（役職）リスト ---
+  const titlePatterns = /弁護士|税理士|会計士|司法書士|行政書士|社労士|弁理士|医師|教授|准教授|講師|博士|代表取締役|取締役|代表社員|社長|副社長|専務|常務|部長|次長|課長|係長|主任|マネージャー|ディレクター|チーフ|リーダー|CEO|CTO|CFO|COO|CMO|VP|President|Director|Manager|Engineer|Partner|Senior|Associate|Fellow|所長|副所長|局長|室長|院長|園長|理事長|理事|監事|顧問|相談役|参与|主幹|技師|技監/;
+
+  // --- 会社名を探す ---
+  const companyPatterns = /株式会社|合同会社|有限会社|（株）|\(株\)|Co\.|Corp|Inc|Ltd|LLC|合名会社|一般社団法人|一般財団法人|弁護士法人|税理士法人|監査法人|社会保険労務士法人|司法書士法人|行政書士法人|医療法人|学校法人|宗教法人|NPO法人|特定非営利|独立行政法人/i;
+
   for (const line of lines) {
-    if (/株式会社|合同会社|有限会社|（株）|\(株\)|Co\.|Corp|Inc|Ltd|LLC|合名会社|一般社団法人|一般財団法人/i.test(line)) {
-      card.company = line.replace(/^(〒[\d\-]+\s*)/, '');
+    if (companyPatterns.test(line)) {
+      // 肩書きが含まれていたら除外して会社名だけ取る
+      let companyLine = line;
+      // 「弁護士法人XXXX 弁護士 山田太郎」のようなパターン対策
+      // 肩書き+名前部分を除去
+      const titleMatch = companyLine.match(new RegExp('\\s+(' + titlePatterns.source + ')\\s*[\\u4e00-\\u9fff\\u3040-\\u309f\\u30a0-\\u30ffA-Za-z\\s]{2,10}$'));
+      if (titleMatch) {
+        companyLine = companyLine.substring(0, titleMatch.index).trim();
+      }
+      card.company = companyLine;
       break;
     }
   }
 
-  // 名前を探す（メール・電話・会社・住所・URLでない行で、短めのもの）
-  const skipPatterns = [
-    /@/, /[\d\-]{8,}/, /株式会社|合同会社|有限会社|Co\.|Corp|Inc|Ltd|LLC/i,
-    /^〒/, /都|道|府|県|市|区|町|村|丁目/, /https?:\/\//, /www\./,
-    /^TEL|^FAX|^Mail|^E-mail|^URL|^HP|^住所|^Address/i,
-    /^\d{3}[\-]/, /[.](com|co|jp|net|org)/i,
-  ];
-
-  for (const line of lines) {
-    if (line.length > 20) continue; // 名前は通常20文字以内
-    if (line.length < 2) continue;
-    let skip = false;
-    for (const pat of skipPatterns) {
-      if (pat.test(line)) { skip = true; break; }
+  // --- 名前を探す ---
+  // 方法1: 肩書きの後ろ or 同じ行にある名前を探す
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (titlePatterns.test(line)) {
+      // 肩書きと同じ行に名前がある場合: 「弁護士 三浦裕和」
+      const parts = line.split(/\s+/);
+      const titleIdx = parts.findIndex(p => titlePatterns.test(p));
+      if (titleIdx >= 0 && titleIdx < parts.length - 1) {
+        // 肩書きの後ろの部分を名前として取得
+        const nameParts = parts.slice(titleIdx + 1).join(' ');
+        if (nameParts.length >= 2 && nameParts.length <= 12) {
+          // 会社名っぽくない & メール/電話でない
+          if (!companyPatterns.test(nameParts) && !/@/.test(nameParts) && !/\d{3}/.test(nameParts)) {
+            card.name = nameParts;
+            break;
+          }
+        }
+      }
+      // 肩書きだけの行なら、次の行が名前の可能性
+      if (!card.name && i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        if (nextLine.length >= 2 && nextLine.length <= 12
+            && !companyPatterns.test(nextLine) && !/@/.test(nextLine)
+            && !/\d{3}/.test(nextLine) && !titlePatterns.test(nextLine)
+            && !/都|道|府|県|市|区|町|村|丁目/.test(nextLine)) {
+          if (/^[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ffA-Za-z\s\-]{2,12}$/.test(nextLine)) {
+            card.name = nextLine;
+            break;
+          }
+        }
+      }
     }
-    if (skip) continue;
+  }
 
-    // 日本語の名前っぽいもの（漢字2〜6文字、またはスペース区切り）
-    if (/^[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ffA-Za-z\s]{2,12}$/.test(line)) {
-      card.name = line;
-      break;
+  // 方法2: 肩書きが見つからなかった場合、フィルタリングで名前を推定
+  if (!card.name) {
+    const skipPatterns = [
+      /@/, /[\d\-]{6,}/, companyPatterns,
+      /^〒/, /都|道|府|県|市|区|町|村|丁目|番地|号/,
+      /https?:\/\//, /www\./, /[.](com|co|jp|net|org)/i,
+      /^TEL|^FAX|^Mail|^E-mail|^URL|^HP|^住所|^Address|^T\s|^F\s/i,
+      /^\d{3}[\-]/, /階|ビル|タワー|センター/,
+    ];
+
+    for (const line of lines) {
+      if (line === card.company) continue;
+      if (line.length > 15 || line.length < 2) continue;
+
+      let skip = false;
+      for (const pat of skipPatterns) {
+        if (pat.test(line)) { skip = true; break; }
+      }
+      if (skip) continue;
+
+      // 肩書きだけの行はスキップ
+      if (titlePatterns.test(line) && line.length <= 6) continue;
+
+      // 日本人名: 漢字2〜6文字（スペース区切りあり/なし）
+      if (/^[\u4e00-\u9fff]{1,4}[\s\u3000]?[\u4e00-\u9fff]{1,4}$/.test(line)) {
+        card.name = line;
+        break;
+      }
+      // アルファベットの名前
+      if (/^[A-Z][a-z]+\s[A-Z][a-z]+/.test(line)) {
+        card.name = line;
+        break;
+      }
+      // カタカナの名前
+      if (/^[\u30a0-\u30ff]{2,6}[\s\u3000][\u30a0-\u30ff]{2,6}$/.test(line)) {
+        card.name = line;
+        break;
+      }
     }
+  }
+
+  // 方法3: それでも見つからなければ、一番短い漢字行を名前とみなす
+  if (!card.name) {
+    let shortest = null;
+    for (const line of lines) {
+      if (line === card.company) continue;
+      if (line.length < 2 || line.length > 10) continue;
+      if (/@/.test(line) || /\d{4}/.test(line)) continue;
+      if (companyPatterns.test(line)) continue;
+      if (/都|道|府|県|市|区|町|ビル|階/.test(line)) continue;
+      if (/^[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\s\u3000]{2,10}$/.test(line)) {
+        if (!shortest || line.length < shortest.length) {
+          shortest = line;
+        }
+      }
+    }
+    if (shortest) card.name = shortest;
   }
 
   return card;
