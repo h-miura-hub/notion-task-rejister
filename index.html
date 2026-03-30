@@ -532,6 +532,13 @@ function init() {
   if (cfgProj) cfgProj.value = CONFIG.projDb;
   if (cfgHist) cfgHist.value = CONFIG.historyDb;
 
+  // 期日にデフォルトで今日の日付をセット
+  const dateInput = document.getElementById('task-date');
+  if (dateInput) {
+    const today = new Date();
+    dateInput.value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  }
+
   if (CONFIG.projDb) fetchProjects();
 }
 
@@ -743,7 +750,8 @@ async function submitTask() {
 
     // タスク入力のみリセット（案件は維持）
     document.getElementById('task-content').value = '';
-    document.getElementById('task-date').value = '';
+    const resetDate = new Date();
+    document.getElementById('task-date').value = `${resetDate.getFullYear()}-${String(resetDate.getMonth()+1).padStart(2,'0')}-${String(resetDate.getDate()).padStart(2,'0')}`;
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
     updatePreview();
 
