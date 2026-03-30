@@ -396,10 +396,16 @@ function capture() {
   const video = document.getElementById('video');
   if (!video) return;
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  capturedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+  // 画像を小さく圧縮して送信サイズを抑える
+  const MAX_SIZE = 1200;
+  let w = video.videoWidth;
+  let h = video.videoHeight;
+  if (w > h && w > MAX_SIZE) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+  else if (h > MAX_SIZE) { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  capturedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
   capturedImageBase64 = capturedDataUrl.split(',')[1];
   if (currentStream) currentStream.getTracks().forEach(t => t.stop());
   const img = document.getElementById('preview-img');
@@ -417,15 +423,28 @@ function handleFileSelect(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(ev) {
-    capturedDataUrl = ev.target.result;
-    capturedImageBase64 = capturedDataUrl.split(',')[1];
-    if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-    const img = document.getElementById('preview-img');
-    if (img) img.src = capturedDataUrl;
-    showScreen('preview');
+    // ギャラリーからの画像も圧縮する
+    const tempImg = new Image();
+    tempImg.onload = function() {
+      const canvas = document.createElement('canvas');
+      const MAX_SIZE = 1200;
+      let w = tempImg.width;
+      let h = tempImg.height;
+      if (w > h && w > MAX_SIZE) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+      else if (h > MAX_SIZE) { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+      capturedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      capturedImageBase64 = capturedDataUrl.split(',')[1];
+      if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+      const img = document.getElementById('preview-img');
+      if (img) img.src = capturedDataUrl;
+      showScreen('preview');
+    };
+    tempImg.src = ev.target.result;
   };
   reader.readAsDataURL(file);
-  // reset so same file can be picked again
   e.target.value = '';
 }
 
@@ -435,8 +454,88 @@ function retake() {
 }
 
 // ============================================
-// OCR via Claude API
+// OCR via Google Cloud Vision API
 // ============================================
+
+// テキストから名刺情報を自動分類する
+function parseBusinessCard(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  const card = { name: '', company: '', email: '', phone: '' };
+
+  // メールアドレスを探す
+  for (const line of lines) {
+    const emailMatch = line.match(/[\w.\-+]+@[\w.\-]+\.\w+/);
+    if (emailMatch) {
+      card.email = emailMatch[0];
+    }
+  }
+
+  // 電話番号を探す（日本の形式）
+  for (const line of lines) {
+    const phoneMatch = line.match(/(?:TEL|Tel|tel|Phone|phone|携帯|電話)?[:\s]*((?:\+81|0)[\d\-().（）\s]{8,})/);
+    if (phoneMatch) {
+      card.phone = phoneMatch[1].replace(/[\s()（）]/g, '');
+      break;
+    }
+    // 番号だけのパターン
+    const numMatch = line.match(/(0\d{1,4}[\-]\d{1,4}[\-]\d{3,4})/);
+    if (numMatch && !card.phone) {
+      card.phone = numMatch[1];
+    }
+  }
+
+  // 会社名を探す（株式会社、合同会社、有限会社などを含む行）
+  for (const line of lines) {
+    if (/株式会社|合同会社|有限会社|（株）|\(株\)|Co\.|Corp|Inc|Ltd|LLC|合名会社|一般社団法人|一般財団法人/i.test(line)) {
+      card.company = line.replace(/^(〒[\d\-]+\s*)/, '');
+      break;
+    }
+  }
+
+  // 名前を探す（メール・電話・会社・住所・URLでない行で、短めのもの）
+  const skipPatterns = [
+    /@/, /[\d\-]{8,}/, /株式会社|合同会社|有限会社|Co\.|Corp|Inc|Ltd|LLC/i,
+    /^〒/, /都|道|府|県|市|区|町|村|丁目/, /https?:\/\//, /www\./,
+    /^TEL|^FAX|^Mail|^E-mail|^URL|^HP|^住所|^Address/i,
+    /^\d{3}[\-]/, /[.](com|co|jp|net|org)/i,
+  ];
+
+  for (const line of lines) {
+    if (line.length > 20) continue; // 名前は通常20文字以内
+    if (line.length < 2) continue;
+    let skip = false;
+    for (const pat of skipPatterns) {
+      if (pat.test(line)) { skip = true; break; }
+    }
+    if (skip) continue;
+
+    // 日本語の名前っぽいもの（漢字2〜6文字、またはスペース区切り）
+    if (/^[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ffA-Za-z\s]{2,12}$/.test(line)) {
+      card.name = line;
+      break;
+    }
+  }
+
+  return card;
+}
+
+// 複数名刺のテキストを分割する試み
+function splitMultipleCards(text) {
+  // 名刺が複数ある場合、大きな空白やブロック区切りで分割を試みる
+  const blocks = text.split(/\n{3,}/);
+
+  if (blocks.length > 1) {
+    // 各ブロックにメールか電話が含まれていれば名刺として扱う
+    const validBlocks = blocks.filter(b => {
+      return /@/.test(b) || /0\d{1,4}[\-]\d/.test(b) || /株式会社|合同会社|有限会社/i.test(b);
+    });
+    if (validBlocks.length > 1) return validBlocks;
+  }
+
+  // 分割できなければ全体を1つの名刺として扱う
+  return [text];
+}
+
 async function startScan() {
   showScreen('scanning');
   const textEl = document.getElementById('scan-text');
@@ -447,49 +546,43 @@ async function startScan() {
   }, 400);
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const config = getConfig();
+    if (!config.workerUrl) {
+      throw new Error('設定画面でWorker URLを入力してください');
+    }
+
+    const response = await fetch(config.workerUrl + '/ocr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/jpeg', data: capturedImageBase64 }
-            },
-            {
-              type: 'text',
-              text: `この画像に写っている名刺をすべて読み取ってください。
-複数枚ある場合はすべて個別に抽出してください。
-JSONの配列のみで返してください。マークダウンのバッククォートは不要です。
-
-[
-  {
-    "name": "氏名",
-    "company": "会社名",
-    "email": "メールアドレス",
-    "phone": "電話番号"
-  }
-]
-
-情報がない項目は空文字""にしてください。
-名刺が1枚でも必ず配列で返してください。`
-            }
-          ]
-        }]
-      })
+      body: JSON.stringify({ image: capturedImageBase64 })
     });
 
-    const data = await response.json();
-    const text = data.content.map(i => i.text || '').join('\n');
-    const clean = text.replace(/```json|```/g, '').trim();
-    scannedCards = JSON.parse(clean);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'OCRリクエスト失敗: HTTP ' + response.status);
+    }
 
-    if (!Array.isArray(scannedCards) || scannedCards.length === 0) {
-      throw new Error('名刺を検出できませんでした');
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    const fullText = data.text;
+    if (!fullText) {
+      throw new Error('テキストを検出できませんでした');
+    }
+
+    // テキストを名刺ごとに分割して解析
+    const cardTexts = splitMultipleCards(fullText);
+    scannedCards = cardTexts.map(t => parseBusinessCard(t));
+
+    // 名前も会社もメールもない空カードを除去
+    scannedCards = scannedCards.filter(c => c.name || c.company || c.email || c.phone);
+
+    if (scannedCards.length === 0) {
+      // 分割に失敗した場合、全体を1枚の名刺として解析
+      scannedCards = [parseBusinessCard(fullText)];
     }
 
     clearInterval(dotTimer);
