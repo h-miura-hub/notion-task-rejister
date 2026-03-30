@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>名刺スキャン</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #1a1d27;
+    --bg3: #242836;
+    --text: #e8eaf0;
+    --text2: #8b90a0;
+    --accent: #4a7cff;
+    --accent2: #3a62d4;
+    --success: #34c759;
+    --danger: #ff453a;
+    --border: #2a2e3a;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .header-title {
+    font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .header-btn {
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+    border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .header-btn:active { transform: scale(0.96); }
+
+  /* Screens */
+  .screen { display: none; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* Camera screen */
+  #screen-camera { position: relative; height: calc(100dvh - 53px); background: #000; }
+  #video { width: 100%; height: 100%; object-fit: cover; }
+  .camera-overlay {
+    position: absolute; inset: 0; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .camera-guide {
+    width: 88%; max-width: 500px; aspect-ratio: 3/2;
+    border: 2px dashed rgba(255,255,255,0.35); border-radius: 14px;
+    position: relative;
+  }
+  .camera-guide-text {
+    position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.55); font-size: 12px; white-space: nowrap;
+  }
+  .camera-controls {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 20px 0 40px;
+    display: flex; justify-content: center; align-items: center; gap: 36px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.75));
+    pointer-events: auto;
+  }
+  .btn-capture {
+    width: 70px; height: 70px; border-radius: 50%;
+    background: #fff; border: 4px solid rgba(255,255,255,0.35);
+    cursor: pointer; transition: transform 0.1s;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.15);
+  }
+  .btn-capture:active { transform: scale(0.9); }
+  .btn-flip {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+    color: #fff; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+  }
+  .btn-flip:active { transform: scale(0.9); }
+  .btn-gallery {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+    color: #fff; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+  }
+
+  /* Preview screen */
+  #screen-preview { height: calc(100dvh - 53px); background: #000; }
+  .preview-img-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 12px; overflow: hidden; }
+  .preview-img-wrap img { max-width: 100%; max-height: 100%; border-radius: 8px; object-fit: contain; }
+  .preview-actions { padding: 14px 16px 36px; display: flex; gap: 10px; }
+
+  /* Scanning screen */
+  #screen-scanning {
+    height: calc(100dvh - 53px);
+    align-items: center; justify-content: center; gap: 16px;
+  }
+  .spinner {
+    width: 44px; height: 44px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scan-text { color: var(--text2); font-size: 14px; font-weight: 500; }
+
+  /* Result screen */
+  #screen-result { min-height: calc(100dvh - 53px); padding-bottom: 24px; }
+  .result-count {
+    padding: 14px 16px 8px; font-size: 13px; color: var(--text2); font-weight: 600;
+  }
+
+  /* Card item */
+  .card-item {
+    margin: 0 12px 12px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .card-header {
+    padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; user-select: none;
+  }
+  .card-header-info { display: flex; flex-direction: column; gap: 2px; }
+  .card-name { font-size: 15px; font-weight: 700; }
+  .card-company { font-size: 12px; color: var(--text2); }
+  .card-toggle { color: var(--text2); font-size: 14px; transition: transform 0.2s; }
+  .card-toggle.open { transform: rotate(180deg); }
+  .card-body { display: none; padding: 0 14px 14px; }
+  .card-body.open { display: block; }
+
+  .field-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-icon { font-size: 14px; width: 22px; text-align: center; flex-shrink: 0; margin-top: 2px; }
+  .field-content { flex: 1; min-width: 0; }
+  .field-label {
+    font-size: 10px; color: var(--text2); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px;
+  }
+  .field-input {
+    width: 100%; background: transparent; border: none; color: var(--text);
+    font-size: 14px; padding: 0; outline: none; font-family: inherit;
+  }
+  .field-input::placeholder { color: var(--border); }
+
+  /* Common fields (出会い, メモ) */
+  .common-fields {
+    margin: 0 12px 12px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+  }
+  .common-fields-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--text2); }
+  .common-field-row { margin-bottom: 10px; }
+  .common-field-row:last-child { margin-bottom: 0; }
+  .common-label {
+    font-size: 10px; color: var(--text2); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+  }
+  .common-input {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px;
+    padding: 8px 10px; outline: none; font-family: inherit; resize: none;
+  }
+  .common-input:focus { border-color: var(--accent); }
+
+  /* Buttons */
+  .btn {
+    padding: 14px 0; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; border: none; width: 100%;
+    letter-spacing: 0.01em;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-danger { background: rgba(255,69,58,0.15); color: var(--danger); border: 1px solid rgba(255,69,58,0.25); }
+
+  .action-bar { padding: 12px 12px 0; display: flex; flex-direction: column; gap: 8px; }
+
+  /* Settings modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  }
+  .modal-overlay.active { display: flex; align-items: flex-end; justify-content: center; }
+  .modal {
+    background: var(--bg2); border-radius: 16px 16px 0 0;
+    width: 100%; max-width: 500px; max-height: 85dvh; overflow-y: auto;
+    padding: 20px 16px 32px;
+    animation: slideUp 0.25s ease-out;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-handle {
+    width: 36px; height: 4px; background: var(--border); border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  .modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+  .modal label {
+    display: block; font-size: 11px; font-weight: 700; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
+  }
+  .modal input[type="text"], .modal input[type="password"] {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px;
+    padding: 10px 12px; outline: none; font-family: monospace;
+    margin-bottom: 14px;
+  }
+  .modal input:focus { border-color: var(--accent); }
+  .modal .hint {
+    background: var(--bg3); border-radius: 10px; padding: 12px;
+    font-size: 12px; color: var(--text2); line-height: 1.7; margin-top: 4px;
+  }
+  .modal .hint strong { color: var(--text); }
+
+  /* Toast */
+  .toast {
+    display: none; position: fixed; bottom: 24px; left: 16px; right: 16px;
+    padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
+    text-align: center; z-index: 300;
+    animation: fadeInUp 0.25s ease-out;
+  }
+  .toast.active { display: block; }
+  .toast.success { background: var(--success); color: #fff; }
+  .toast.error { background: var(--danger); color: #fff; }
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Hidden file input */
+  #file-input { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title">📇 名刺スキャン</div>
+  <button class="header-btn" onclick="openSettings()">⚙ 設定</button>
+</div>
+
+<!-- Camera Screen -->
+<div id="screen-camera" class="screen active">
+  <video id="video" autoplay playsinline muted></video>
+  <div class="camera-overlay">
+    <div class="camera-guide">
+      <div class="camera-guide-text">名刺を枠内に並べてください</div>
+    </div>
+  </div>
+  <div class="camera-controls">
+    <button class="btn-gallery" onclick="openGallery()">🖼</button>
+    <button class="btn-capture" onclick="capture()"></button>
+    <button class="btn-flip" onclick="flipCamera()">↻</button>
+  </div>
+  <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)">
+</div>
+
+<!-- Preview Screen -->
+<div id="screen-preview" class="screen">
+  <div class="preview-img-wrap">
+    <img id="preview-img" src="" alt="">
+  </div>
+  <div class="preview-actions">
+    <button class="btn btn-secondary" style="flex:1" onclick="retake()">撮り直す</button>
+    <button class="btn btn-primary" style="flex:2" onclick="startScan()">スキャンする</button>
+  </div>
+</div>
+
+<!-- Scanning Screen -->
+<div id="screen-scanning" class="screen">
+  <div class="spinner"></div>
+  <div class="scan-text" id="scan-text">名刺を読み取っています...</div>
+</div>
+
+<!-- Result Screen -->
+<div id="screen-result" class="screen">
+  <div class="result-count" id="result-count"></div>
+  <div id="cards-container"></div>
+
+  <!-- 共通フィールド -->
+  <div class="common-fields">
+    <div class="common-fields-title">📝 共通情報（全員に適用）</div>
+    <div class="common-field-row">
+      <div class="common-label">出会い</div>
+      <input type="text" class="common-input" id="input-deai" placeholder="例: 〇〇展示会 2026/03/27">
+    </div>
+    <div class="common-field-row">
+      <div class="common-label">メモ</div>
+      <textarea class="common-input" id="input-memo" rows="2" placeholder="例: AI関連の話で盛り上がった"></textarea>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn btn-primary" id="btn-save" onclick="saveAllToNotion()">Notionに一括保存</button>
+    <button class="btn btn-secondary" onclick="scanAnother()">続けてスキャン</button>
+    <button class="btn btn-secondary" onclick="backToCamera()">最初に戻る</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="modal-settings">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>⚙ 設定</h2>
+    <label>Cloudflare Worker URL</label>
+    <input type="text" id="set-worker" placeholder="https://notion-proxy.xxxxx.workers.dev">
+    <label>Notion Database ID</label>
+    <input type="text" id="set-dbid" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    <div class="hint">
+      <strong>Notionデータベースの必要プロパティ:</strong><br>
+      ・氏名（タイトル）<br>
+      ・会社名（テキスト）<br>
+      ・メール（メール）<br>
+      ・電話（電話番号）<br>
+      ・出会い（テキスト）<br>
+      ・メモ（テキスト）
+    </div>
+    <div style="margin-top:16px; display:flex; gap:8px;">
+      <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+      <button class="btn btn-secondary" onclick="closeSettings()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================
+// State
+// ============================================
+let currentStream = null;
+let facingMode = 'environment';
+let capturedImageBase64 = null; // raw base64 (no prefix)
+let capturedDataUrl = null;
+let scannedCards = []; // array of {name, company, email, phone}
+
+// ============================================
+// Config (localStorage)
+// ============================================
+const CONFIG_KEY = 'meishi_config';
+
+function getConfig() {
+  try {
+    return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
+  } catch { return {}; }
+}
+
+function setConfig(obj) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(obj));
+}
+
+// ============================================
+// Screen Navigation
+// ============================================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + id);
+  if (el) el.classList.add('active');
+}
+
+// ============================================
+// Camera
+// ============================================
+async function startCamera() {
+  try {
+    if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    });
+    currentStream = stream;
+    const video = document.getElementById('video');
+    if (video) video.srcObject = stream;
+  } catch (e) {
+    showToast('カメラにアクセスできません', 'error');
+  }
+}
+
+function flipCamera() {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  startCamera();
+}
+
+function capture() {
+  const video = document.getElementById('video');
+  if (!video) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  capturedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+  capturedImageBase64 = capturedDataUrl.split(',')[1];
+  if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+  const img = document.getElementById('preview-img');
+  if (img) img.src = capturedDataUrl;
+  showScreen('preview');
+}
+
+// Gallery (file picker)
+function openGallery() {
+  document.getElementById('file-input').click();
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    capturedDataUrl = ev.target.result;
+    capturedImageBase64 = capturedDataUrl.split(',')[1];
+    if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+    const img = document.getElementById('preview-img');
+    if (img) img.src = capturedDataUrl;
+    showScreen('preview');
+  };
+  reader.readAsDataURL(file);
+  // reset so same file can be picked again
+  e.target.value = '';
+}
+
+function retake() {
+  showScreen('camera');
+  startCamera();
+}
+
+// ============================================
+// OCR via Google Cloud Vision API
+// ============================================
+
+// テキストから名刺情報を自動分類する
+function parseBusinessCard(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  const card = { name: '', company: '', email: '', phone: '' };
+
+  // メールアドレスを探す
+  for (const line of lines) {
+    const emailMatch = line.match(/[\w.\-+]+@[\w.\-]+\.\w+/);
+    if (emailMatch) {
+      card.email = emailMatch[0];
+    }
+  }
+
+  // 電話番号を探す（日本の形式）
+  for (const line of lines) {
+    const phoneMatch = line.match(/(?:TEL|Tel|tel|Phone|phone|携帯|電話)?[:\s]*((?:\+81|0)[\d\-().（）\s]{8,})/);
+    if (phoneMatch) {
+      card.phone = phoneMatch[1].replace(/[\s()（）]/g, '');
+      break;
+    }
+    // 番号だけのパターン
+    const numMatch = line.match(/(0\d{1,4}[\-]\d{1,4}[\-]\d{3,4})/);
+    if (numMatch && !card.phone) {
+      card.phone = numMatch[1];
+    }
+  }
+
+  // 会社名を探す（株式会社、合同会社、有限会社などを含む行）
+  for (const line of lines) {
+    if (/株式会社|合同会社|有限会社|（株）|\(株\)|Co\.|Corp|Inc|Ltd|LLC|合名会社|一般社団法人|一般財団法人/i.test(line)) {
+      card.company = line.replace(/^(〒[\d\-]+\s*)/, '');
+      break;
+    }
+  }
+
+  // 名前を探す（メール・電話・会社・住所・URLでない行で、短めのもの）
+  const skipPatterns = [
+    /@/, /[\d\-]{8,}/, /株式会社|合同会社|有限会社|Co\.|Corp|Inc|Ltd|LLC/i,
+    /^〒/, /都|道|府|県|市|区|町|村|丁目/, /https?:\/\//, /www\./,
+    /^TEL|^FAX|^Mail|^E-mail|^URL|^HP|^住所|^Address/i,
+    /^\d{3}[\-]/, /[.](com|co|jp|net|org)/i,
+  ];
+
+  for (const line of lines) {
+    if (line.length > 20) continue; // 名前は通常20文字以内
+    if (line.length < 2) continue;
+    let skip = false;
+    for (const pat of skipPatterns) {
+      if (pat.test(line)) { skip = true; break; }
+    }
+    if (skip) continue;
+
+    // 日本語の名前っぽいもの（漢字2〜6文字、またはスペース区切り）
+    if (/^[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ffA-Za-z\s]{2,12}$/.test(line)) {
+      card.name = line;
+      break;
+    }
+  }
+
+  return card;
+}
+
+// 複数名刺のテキストを分割する試み
+function splitMultipleCards(text) {
+  // 名刺が複数ある場合、大きな空白やブロック区切りで分割を試みる
+  const blocks = text.split(/\n{3,}/);
+
+  if (blocks.length > 1) {
+    // 各ブロックにメールか電話が含まれていれば名刺として扱う
+    const validBlocks = blocks.filter(b => {
+      return /@/.test(b) || /0\d{1,4}[\-]\d/.test(b) || /株式会社|合同会社|有限会社/i.test(b);
+    });
+    if (validBlocks.length > 1) return validBlocks;
+  }
+
+  // 分割できなければ全体を1つの名刺として扱う
+  return [text];
+}
+
+async function startScan() {
+  showScreen('scanning');
+  const textEl = document.getElementById('scan-text');
+  let dots = 0;
+  const dotTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    if (textEl) textEl.textContent = '名刺を読み取っています' + '.'.repeat(dots);
+  }, 400);
+
+  try {
+    const config = getConfig();
+    if (!config.workerUrl) {
+      throw new Error('設定画面でWorker URLを入力してください');
+    }
+
+    const response = await fetch(config.workerUrl + '/ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: capturedImageBase64 })
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'OCRリクエスト失敗: HTTP ' + response.status);
+    }
+
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    const fullText = data.text;
+    if (!fullText) {
+      throw new Error('テキストを検出できませんでした');
+    }
+
+    // テキストを名刺ごとに分割して解析
+    const cardTexts = splitMultipleCards(fullText);
+    scannedCards = cardTexts.map(t => parseBusinessCard(t));
+
+    // 名前も会社もメールもない空カードを除去
+    scannedCards = scannedCards.filter(c => c.name || c.company || c.email || c.phone);
+
+    if (scannedCards.length === 0) {
+      // 分割に失敗した場合、全体を1枚の名刺として解析
+      scannedCards = [parseBusinessCard(fullText)];
+    }
+
+    clearInterval(dotTimer);
+    renderResults();
+    showScreen('result');
+
+  } catch (e) {
+    clearInterval(dotTimer);
+    showToast('読み取り失敗: ' + e.message, 'error');
+    showScreen('preview');
+  }
+}
+
+// ============================================
+// Result Rendering
+// ============================================
+function renderResults() {
+  const container = document.getElementById('cards-container');
+  const countEl = document.getElementById('result-count');
+  if (!container || !countEl) return;
+
+  countEl.textContent = `${scannedCards.length}枚の名刺を検出しました`;
+  container.innerHTML = '';
+
+  scannedCards.forEach((card, i) => {
+    const fields = [
+      { key: 'name',    icon: '👤', label: '氏名',    val: card.name || '' },
+      { key: 'company', icon: '🏢', label: '会社名',  val: card.company || '' },
+      { key: 'email',   icon: '✉️', label: 'メール',  val: card.email || '' },
+      { key: 'phone',   icon: '📞', label: '電話',    val: card.phone || '' },
+    ];
+
+    const isFirst = i === 0;
+    const html = `
+      <div class="card-item" id="card-${i}">
+        <div class="card-header" onclick="toggleCard(${i})">
+          <div class="card-header-info">
+            <div class="card-name" id="card-name-${i}">${card.name || '名前未検出'}</div>
+            <div class="card-company" id="card-company-${i}">${card.company || ''}</div>
+          </div>
+          <span class="card-toggle ${isFirst ? 'open' : ''}" id="toggle-${i}">▼</span>
+        </div>
+        <div class="card-body ${isFirst ? 'open' : ''}" id="body-${i}">
+          ${fields.map(f => `
+            <div class="field-row">
+              <span class="field-icon">${f.icon}</span>
+              <div class="field-content">
+                <div class="field-label">${f.label}</div>
+                <input class="field-input" value="${escapeHtml(f.val)}"
+                  placeholder="未検出"
+                  oninput="updateCard(${i}, '${f.key}', this.value)">
+              </div>
+            </div>
+          `).join('')}
+          <div style="padding-top:8px;">
+            <button class="btn btn-danger" style="padding:10px 0; font-size:13px;"
+              onclick="removeCard(${i})">この名刺を削除</button>
+          </div>
+        </div>
+      </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+  });
+}
+
+function toggleCard(i) {
+  const body = document.getElementById('body-' + i);
+  const toggle = document.getElementById('toggle-' + i);
+  if (body) body.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+
+function updateCard(i, key, value) {
+  if (scannedCards[i]) {
+    scannedCards[i][key] = value;
+    // Update header display
+    if (key === 'name') {
+      const el = document.getElementById('card-name-' + i);
+      if (el) el.textContent = value || '名前未検出';
+    }
+    if (key === 'company') {
+      const el = document.getElementById('card-company-' + i);
+      if (el) el.textContent = value;
+    }
+  }
+}
+
+function removeCard(i) {
+  scannedCards.splice(i, 1);
+  renderResults();
+  if (scannedCards.length === 0) {
+    showToast('すべての名刺を削除しました', 'error');
+    backToCamera();
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ============================================
+// Notion Save
+// ============================================
+async function notionRequest(path, method, body) {
+  const config = getConfig();
+  if (!config.workerUrl) throw new Error('Worker URLが未設定です');
+  const res = await fetch(config.workerUrl + path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'HTTP ' + res.status);
+  }
+  return res.json();
+}
+
+async function saveAllToNotion() {
+  const config = getConfig();
+  if (!config.workerUrl || !config.dbId) {
+    showToast('設定画面でWorker URLとDB IDを入力してください', 'error');
+    openSettings();
+    return;
+  }
+
+  const btn = document.getElementById('btn-save');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+
+  const deai = document.getElementById('input-deai');
+  const memo = document.getElementById('input-memo');
+  const deaiVal = deai ? deai.value.trim() : '';
+  const memoVal = memo ? memo.value.trim() : '';
+
+  let successCount = 0;
+  let errors = [];
+
+  for (let i = 0; i < scannedCards.length; i++) {
+    const card = scannedCards[i];
+    const properties = {};
+
+    // タイトル: 氏名
+    properties['氏名'] = { title: [{ text: { content: card.name || '（名前なし）' } }] };
+
+    // テキスト: 会社名
+    if (card.company) {
+      properties['会社名'] = { rich_text: [{ text: { content: card.company } }] };
+    }
+
+    // メール
+    if (card.email) {
+      properties['メール'] = { email: card.email };
+    }
+
+    // 電話
+    if (card.phone) {
+      properties['電話'] = { phone_number: card.phone };
+    }
+
+    // 出会い
+    if (deaiVal) {
+      properties['出会い'] = { rich_text: [{ text: { content: deaiVal } }] };
+    }
+
+    // メモ
+    if (memoVal) {
+      properties['メモ'] = { rich_text: [{ text: { content: memoVal } }] };
+    }
+
+    try {
+      await notionRequest('/v1/pages', 'POST', {
+        parent: { database_id: config.dbId },
+        properties: properties,
+      });
+      successCount++;
+      if (btn) btn.textContent = `保存中... (${successCount}/${scannedCards.length})`;
+    } catch (e) {
+      errors.push(`${card.name || '不明'}: ${e.message}`);
+    }
+  }
+
+  if (btn) { btn.disabled = false; }
+
+  if (errors.length === 0) {
+    if (btn) { btn.textContent = '✓ 保存完了'; btn.className = 'btn btn-success'; }
+    showToast(`${successCount}件をNotionに保存しました`, 'success');
+    setTimeout(() => {
+      if (btn) { btn.textContent = 'Notionに一括保存'; btn.className = 'btn btn-primary'; }
+    }, 2500);
+  } else {
+    if (btn) { btn.textContent = 'Notionに一括保存'; }
+    showToast(`${successCount}件成功、${errors.length}件失敗`, 'error');
+    console.error('Save errors:', errors);
+  }
+}
+
+// ============================================
+// Continue scanning
+// ============================================
+function scanAnother() {
+  // Keep existing cards, go back to camera to add more
+  showScreen('camera');
+  startCamera();
+}
+
+function backToCamera() {
+  scannedCards = [];
+  capturedImageBase64 = null;
+  capturedDataUrl = null;
+  const deai = document.getElementById('input-deai');
+  const memo = document.getElementById('input-memo');
+  if (deai) deai.value = '';
+  if (memo) memo.value = '';
+  showScreen('camera');
+  startCamera();
+}
+
+// ============================================
+// Settings
+// ============================================
+function openSettings() {
+  const config = getConfig();
+  const wEl = document.getElementById('set-worker');
+  const dEl = document.getElementById('set-dbid');
+  if (wEl) wEl.value = config.workerUrl || '';
+  if (dEl) dEl.value = config.dbId || '';
+  const modal = document.getElementById('modal-settings');
+  if (modal) modal.classList.add('active');
+}
+
+function closeSettings() {
+  const modal = document.getElementById('modal-settings');
+  if (modal) modal.classList.remove('active');
+}
+
+function saveSettings() {
+  const wEl = document.getElementById('set-worker');
+  const dEl = document.getElementById('set-dbid');
+  const workerUrl = wEl ? wEl.value.trim().replace(/\/$/, '') : '';
+  const dbId = dEl ? dEl.value.trim() : '';
+  setConfig({ workerUrl, dbId });
+  showToast('設定を保存しました', 'success');
+  closeSettings();
+}
+
+// Close modal on overlay click
+document.getElementById('modal-settings')?.addEventListener('click', function(e) {
+  if (e.target === this) closeSettings();
+});
+
+// ============================================
+// Toast
+// ============================================
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast active ' + (type || '');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.classList.remove('active'); }, 2800);
+}
+
+// ============================================
+// Init
+// ============================================
+window.addEventListener('DOMContentLoaded', () => {
+  // Pre-fill DB ID if not set
+  const config = getConfig();
+  if (!config.dbId) {
+    setConfig({
+      ...config,
+      dbId: '1650b8afe6f781e588c3ea049c1b83f2'
+    });
+  }
+  startCamera();
+});
+</script>
+</body>
+</html>
