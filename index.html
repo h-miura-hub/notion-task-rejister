@@ -505,7 +505,25 @@ const CONFIG = {
   historyDb: localStorage.getItem('notion_history_db') || '',
 };
 
-const TASK_TYPES = ['催促','電話','書面作成','資料送付','MTG準備','確認・承認','見積作成','契約書対応'];
+const TASK_TYPES = ['催促','電話','書面作成','資料送付','MTG準備','確認・承認','見積作成','契約書対応','リーガルチェック'];
+
+// サブタスク定義（業務種別ごと）
+const SUB_TASKS = {
+  '書面作成': [
+    '1. 資料確認・構成案作成 📝',
+    '2. 本文ドラフト作成 💻',
+    '3. 依頼者へ送付・確認依頼 ✉️',
+    '4. 返信待ち（or 催促） ⏳',
+    '5. 修正・最終化 🔧',
+    '6. 提出 ✅',
+  ],
+  'リーガルチェック': [
+    '1. 契約書・資料の読み込み 🧐',
+    '2. 修正案・コメント作成 ✍️',
+    '3. 修正版の送付・解説 📤',
+    '4. 相手方との調整待ち 🤝',
+  ],
+};
 
 // ===== 状態 =====
 let selectedProject = null; // 共通の案件選択
@@ -735,18 +753,45 @@ async function submitTask() {
       props['期日'] = { date: { start: dateVal } };
     }
 
-    await notionRequest(
+    // 親タスクを作成
+    const parentRes = await notionRequest(
       `https://api.notion.com/v1/pages`,
       'POST',
       { parent: { database_id: CONFIG.taskDb }, properties: props }
     );
+    const parentId = parentRes.id;
+
+    // サブタスクが定義されている業務種別の場合、自動作成
+    const subTasks = SUB_TASKS[content];
+    if (subTasks && subTasks.length > 0) {
+      btn.textContent = 'サブタスク作成中...';
+      for (const sub of subTasks) {
+        const subProps = {
+          'タスク名': { title: [{ text: { content: `${selectedProject.name} / ${sub}` } }] },
+          '親タスク': { relation: [{ id: parentId }] },
+        };
+        if (selectedProject?.id) {
+          subProps['プロジェクト'] = { relation: [{ id: selectedProject.id }] };
+        }
+        await notionRequest(
+          `https://api.notion.com/v1/pages`,
+          'POST',
+          { parent: { database_id: CONFIG.taskDb }, properties: subProps }
+        );
+      }
+    }
 
     const now = new Date();
     const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
-    recentHistory.unshift({ name: taskName, time: timeStr, type: 'task' });
+    const subCount = subTasks ? subTasks.length : 0;
+    const histName = subCount > 0 ? `${taskName}（+${subCount}サブタスク）` : taskName;
+    recentHistory.unshift({ name: histName, time: timeStr, type: 'task' });
     renderHistory();
 
-    showToast('タスクを登録しました');
+    const msg = subCount > 0
+      ? `タスクと${subCount}件のサブタスクを登録しました`
+      : 'タスクを登録しました';
+    showToast(msg);
 
     // タスク入力のみリセット（案件は維持）
     document.getElementById('task-content').value = '';
