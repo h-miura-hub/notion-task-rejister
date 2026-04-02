@@ -769,6 +769,7 @@ async function submitTask() {
         const subProps = {
           'タスク名': { title: [{ text: { content: `${selectedProject.name} / ${sub}` } }] },
           '親タスク': { relation: [{ id: parentId }] },
+          '期日': { date: { start: dateVal } },
         };
         if (selectedProject?.id) {
           subProps['プロジェクト'] = { relation: [{ id: selectedProject.id }] };
