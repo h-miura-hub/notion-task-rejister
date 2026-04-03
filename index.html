@@ -762,7 +762,8 @@ async function submitTask() {
     const parentId = parentRes.id;
 
     // サブタスクが定義されている業務種別の場合、自動作成
-    const subTasks = SUB_TASKS[content];
+    const matchedType = Object.keys(SUB_TASKS).find(key => content.startsWith(key));
+    const subTasks = matchedType ? SUB_TASKS[matchedType] : null;
     if (subTasks && subTasks.length > 0) {
       btn.textContent = 'サブタスク作成中...';
       for (const sub of subTasks) {
