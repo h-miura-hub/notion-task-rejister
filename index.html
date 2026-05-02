@@ -265,6 +265,29 @@
 
   .date-input:focus { border-color: var(--border-focus); }
 
+  /* 見積セレクト */
+  .estimate-select {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20d%3D%22M2%204l4%204%204-4%22%20stroke%3D%22%236b6b60%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+
+  .estimate-select:focus { border-color: var(--border-focus); }
+
   /* 登録ボタン */
   .submit-btn {
     width: 100%;
@@ -456,10 +479,29 @@
     </div>
   </div>
 
-  <!-- 期日 -->
+  <!-- 見積 -->
   <div class="card">
-    <div class="field-label">期日（任意）</div>
+    <div class="field-label">見積（任意）</div>
+    <select class="estimate-select" id="task-estimate">
+      <option value="">-- 選択しない --</option>
+      <option value="SS（5分）">SS（5分）</option>
+      <option value="S（15分）">S（15分）</option>
+      <option value="M（30分）">M（30分）</option>
+      <option value="L（60分）">L（60分）</option>
+      <option value="LL（120分）">LL（120分）</option>
+    </select>
+  </div>
+
+  <!-- 確認日 -->
+  <div class="card">
+    <div class="field-label">確認日</div>
     <input class="date-input" id="task-date" type="date">
+  </div>
+
+  <!-- 本当の期限 -->
+  <div class="card">
+    <div class="field-label">本当の期限（任意）</div>
+    <input class="date-input" id="task-deadline" type="date">
   </div>
 
   <!-- タスク登録ボタン -->
@@ -507,8 +549,8 @@ const CONFIG = {
 
 const TASK_TYPES = ['催促','電話','書面作成','資料送付','MTG準備','確認・承認','見積作成','契約書対応','リーガルチェック'];
 
-// サブタスク定義（業務種別ごと）
-const SUB_TASKS = {
+// チェックリスト定義（業務種別ごと）
+const CHECKLISTS = {
   '書面作成': [
     '1. 資料確認・構成案作成 📝',
     '2. 本文ドラフト作成 💻',
@@ -550,7 +592,7 @@ function init() {
   if (cfgProj) cfgProj.value = CONFIG.projDb;
   if (cfgHist) cfgHist.value = CONFIG.historyDb;
 
-  // 期日にデフォルトで今日の日付をセット
+  // 確認日にデフォルトで今日の日付をセット
   const dateInput = document.getElementById('task-date');
   if (dateInput) {
     const today = new Date();
@@ -732,9 +774,11 @@ async function submitTask() {
     toggleConfig();
     return;
   }
-  const content = document.getElementById('task-content').value.trim();
-  const taskName = `${selectedProject.name} / ${content}`;
-  const dateVal  = document.getElementById('task-date').value;
+  const content    = document.getElementById('task-content').value.trim();
+  const taskName   = `${selectedProject.name} / ${content}`;
+  const dateVal    = document.getElementById('task-date').value;
+  const deadlineVal= document.getElementById('task-deadline').value;
+  const estimateVal= document.getElementById('task-estimate').value;
 
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
@@ -750,53 +794,83 @@ async function submitTask() {
     }
 
     if (dateVal) {
-      props['期日'] = { date: { start: dateVal } };
+      props['確認日'] = { date: { start: dateVal } };
     }
 
-    // 親タスクを作成
-    const parentRes = await notionRequest(
+    if (deadlineVal) {
+      props['本当の期限'] = { date: { start: deadlineVal } };
+    }
+
+    if (estimateVal) {
+      props['見積'] = { select: { name: estimateVal } };
+    }
+
+    // チェックリストが定義されている業務種別の場合、ページ内に自動追加
+    const matchedType = Object.keys(CHECKLISTS).find(key => content.startsWith(key));
+    const checklistItems = matchedType ? CHECKLISTS[matchedType] : null;
+
+    let children = [];
+    if (checklistItems && checklistItems.length > 0) {
+      // 工程の見出し
+      children.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ type: 'text', text: { content: '工程' } }]
+        }
+      });
+      // 各工程をチェックボックスとして追加
+      for (const item of checklistItems) {
+        children.push({
+          object: 'block',
+          type: 'to_do',
+          to_do: {
+            rich_text: [{ type: 'text', text: { content: item } }],
+            checked: false
+          }
+        });
+      }
+      // メモ用の見出し
+      children.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ type: 'text', text: { content: 'メモ' } }]
+        }
+      });
+    }
+
+    // ページ作成（プロパティ + チェックリストを同時に）
+    const requestBody = {
+      parent: { database_id: CONFIG.taskDb },
+      properties: props
+    };
+    if (children.length > 0) {
+      requestBody.children = children;
+    }
+
+    await notionRequest(
       `https://api.notion.com/v1/pages`,
       'POST',
-      { parent: { database_id: CONFIG.taskDb }, properties: props }
+      requestBody
     );
-    const parentId = parentRes.id;
-
-    // サブタスクが定義されている業務種別の場合、自動作成
-    const matchedType = Object.keys(SUB_TASKS).find(key => content.startsWith(key));
-    const subTasks = matchedType ? SUB_TASKS[matchedType] : null;
-    if (subTasks && subTasks.length > 0) {
-      btn.textContent = 'サブタスク作成中...';
-      for (const sub of subTasks) {
-        const subProps = {
-          'タスク名': { title: [{ text: { content: `${selectedProject.name} / ${sub}` } }] },
-          '親タスク': { relation: [{ id: parentId }] },
-          '期日': { date: { start: dateVal } },
-        };
-        if (selectedProject?.id) {
-          subProps['プロジェクト'] = { relation: [{ id: selectedProject.id }] };
-        }
-        await notionRequest(
-          `https://api.notion.com/v1/pages`,
-          'POST',
-          { parent: { database_id: CONFIG.taskDb }, properties: subProps }
-        );
-      }
-    }
 
     const now = new Date();
     const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
-    const subCount = subTasks ? subTasks.length : 0;
-    const histName = subCount > 0 ? `${taskName}（+${subCount}サブタスク）` : taskName;
+    const checkCount = checklistItems ? checklistItems.length : 0;
+    const histName = checkCount > 0 ? `${taskName}（+${checkCount}工程）` : taskName;
     recentHistory.unshift({ name: histName, time: timeStr, type: 'task' });
     renderHistory();
 
-    const msg = subCount > 0
-      ? `タスクと${subCount}件のサブタスクを登録しました`
+    const msg = checkCount > 0
+      ? `タスクを登録しました（${checkCount}工程のチェックリスト付き）`
       : 'タスクを登録しました';
     showToast(msg);
 
     // タスク入力のみリセット（案件は維持）
     document.getElementById('task-content').value = '';
+    document.getElementById('task-deadline').value = '';
+    document.getElementById('task-estimate').value = '';
     const resetDate = new Date();
     document.getElementById('task-date').value = `${resetDate.getFullYear()}-${String(resetDate.getMonth()+1).padStart(2,'0')}-${String(resetDate.getDate()).padStart(2,'0')}`;
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
