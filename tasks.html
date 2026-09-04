@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#061527">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="タスク">
+<title>タスク</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:      #061527;
+    --ink-1:    #0B2038;
+    --ink-2:    #112B49;
+    --line:     #17334F;
+    --line-soft:#102743;
+
+    --fg:       #EAF1F9;
+    --fg-2:     #92A9C4;
+    --fg-3:     #5D7593;
+
+    --azure:    #58A6FF;
+    --ember:    #FF8A5C;
+    --mint:     #4FD1A5;
+
+    --tap: 44px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { background: var(--ink); }
+
+  body {
+    font-family: 'Zen Kaku Gothic New', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--ink);
+    color: var(--fg);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    font-feature-settings: "palt" 1;
+  }
+
+  .wrap {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 0 20px calc(48px + env(safe-area-inset-bottom));
+  }
+
+  button, input { font-family: inherit; }
+
+  :focus-visible {
+    outline: 2px solid var(--azure);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* ── ヘッダー ───────────────────────── */
+
+  .top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(6, 21, 39, 0.86);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    border-bottom: 1px solid var(--line-soft);
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .top-inner { max-width: 520px; margin: 0 auto; padding: 0 20px; }
+
+  .headline {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 0 14px;
+  }
+
+  .date {
+    font-size: 25px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .date .weekday {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--fg-2);
+    margin-left: 9px;
+    letter-spacing: 0;
+  }
+
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--fg-3);
+    white-space: nowrap;
+  }
+
+  .linkish {
+    background: none;
+    border: none;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--fg-2);
+    cursor: pointer;
+  }
+
+  .linkish:hover { color: var(--fg); }
+  .linkish:disabled { color: var(--fg-3); cursor: default; }
+
+  /* ── タブ ──────────────────────────── */
+
+  .tabs { display: flex; gap: 22px; }
+
+  .tab {
+    position: relative;
+    background: none;
+    border: none;
+    padding: 0 0 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--fg-3);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .tab:hover { color: var(--fg-2); }
+
+  .tab.active { color: var(--fg); font-weight: 700; }
+
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: var(--azure);
+    border-radius: 2px 2px 0 0;
+  }
+
+  .tab .n {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--fg-3);
+    margin-left: 5px;
+  }
+
+  .tab.active .n { color: var(--azure); }
+
+  /* ── 検索 ──────────────────────────── */
+
+  .search {
+    width: 100%;
+    height: var(--tap);
+    margin: 16px 0 4px;
+    padding: 0 14px;
+    font-size: 14px;
+    color: var(--fg);
+    background: var(--ink-1);
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search:focus { border-color: var(--line); }
+  .search::placeholder { color: var(--fg-3); }
+
+  /* ── グループ ──────────────────────── */
+
+  .group { margin-top: 30px; }
+
+  .group-label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--fg-2);
+  }
+
+  .group-label .n { font-weight: 500; color: var(--fg-3); }
+  .group-label[data-u="overdue"] { color: var(--ember); }
+  .group-label[data-u="today"] { color: var(--azure); }
+
+  /* ── 行 ───────────────────────────── */
+
+  .row {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 15px 4px 15px 0;
+    border-bottom: 1px solid var(--line-soft);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+  }
+
+  .row::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 0; bottom: -1px;
+    width: 2px;
+    background: transparent;
+  }
+
+  .row[data-u="overdue"]::before { background: var(--ember); }
+  .row[data-u="today"]::before { background: var(--azure); }
+
+  .row.leaving { opacity: 0; transform: translateX(20px); }
+
+  .tick {
+    flex-shrink: 0;
+    position: relative;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    background: none;
+    border: 1.5px solid var(--fg-3);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .tick:hover { border-color: var(--mint); }
+
+  .tick.on { background: var(--mint); border-color: var(--mint); }
+
+  .tick.on::after {
+    content: '';
+    position: absolute;
+    left: 6px; top: 2.5px;
+    width: 4px; height: 9px;
+    border: solid var(--ink);
+    border-width: 0 2px 2px 0;
+    transform: rotate(43deg);
+  }
+
+  .row-main { flex: 1; min-width: 0; }
+
+  .row-title {
+    font-size: 15px;
+    line-height: 1.55;
+    letter-spacing: 0.005em;
+    word-break: break-word;
+  }
+
+  .row.done .row-title { color: var(--fg-3); text-decoration: line-through; }
+
+  .row-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+
+  .proj {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg-2);
+  }
+
+  .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--fg-3); opacity: 0.7; }
+
+  .when { font-variant-numeric: tabular-nums; }
+  .when[data-u="overdue"] { color: var(--ember); font-weight: 500; }
+  .when[data-u="today"] { color: var(--azure); font-weight: 500; }
+
+  .open {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 26px;
+    margin: -2px -6px 0 0;
+    color: var(--fg-3);
+    transition: color 0.15s;
+  }
+
+  .open:hover { color: var(--azure); }
+  .open svg { width: 14px; height: 14px; }
+
+  /* ── 空・設定・通知 ────────────────── */
+
+  .empty {
+    padding: 64px 8px;
+    font-size: 14px;
+    line-height: 2;
+    color: var(--fg-3);
+  }
+
+  .empty b { display: block; color: var(--fg-2); font-weight: 500; margin-bottom: 4px; }
+
+  .panel {
+    display: none;
+    margin: 18px 0 4px;
+    padding: 20px;
+    background: var(--ink-1);
+    border: 1px solid var(--line-soft);
+    border-radius: 10px;
+  }
+
+  .panel.open { display: block; }
+
+  .panel h2 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+
+  .panel p { font-size: 12px; line-height: 1.85; color: var(--fg-3); margin-bottom: 16px; }
+
+  .field { margin-bottom: 14px; }
+
+  .field label { display: block; font-size: 12px; color: var(--fg-2); margin-bottom: 6px; }
+
+  .field input {
+    width: 100%;
+    height: var(--tap);
+    padding: 0 12px;
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--fg);
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    outline: none;
+  }
+
+  .field input:focus { border-color: var(--azure); }
+
+  .save {
+    height: var(--tap);
+    padding: 0 22px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--azure);
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+
+  .save:hover { filter: brightness(1.08); }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(28px + env(safe-area-inset-bottom));
+    transform: translate(-50%, 12px);
+    max-width: min(420px, calc(100vw - 40px));
+    padding: 13px 20px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--fg);
+    border-radius: 9px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 50;
+  }
+
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.bad { background: var(--ember); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="top-inner">
+    <div class="headline">
+      <div class="date" id="date"></div>
+      <div class="top-actions">
+        <span id="sync">読み込み中</span>
+        <button class="linkish" id="refresh" onclick="refresh()">更新</button>
+        <button class="linkish" onclick="togglePanel()">設定</button>
+      </div>
+    </div>
+    <div class="tabs" id="tabs"></div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="panel" id="panel">
+    <h2>データベースの接続</h2>
+    <p>登録アプリの「API設定」に入っているIDと同じものを貼り付けてください。この端末のブラウザにのみ保存されます。</p>
+    <div class="field">
+      <label for="cfg-task">タスクDB ID</label>
+      <input id="cfg-task" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="32桁の英数字">
+    </div>
+    <div class="field">
+      <label for="cfg-proj">プロジェクトDB ID</label>
+      <input id="cfg-proj" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="32桁の英数字">
+    </div>
+    <button class="save" onclick="saveConfig()">保存して読み込む</button>
+  </div>
+
+  <input class="search" id="filter" type="text" placeholder="案件名・内容で絞り込む" oninput="render()" autocomplete="off">
+
+  <div id="list"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 設定 ──────────────────────────────
+// 秘密情報は持たない。Notionトークンは Worker の環境変数にある。
+const CONFIG = {
+  workerUrl: 'https://notion-proxy.h-miura.workers.dev',
+  taskDb: localStorage.getItem('notion_task_db') || '',
+  projDb: localStorage.getItem('notion_proj_db') || '',
+};
+
+const CACHE_KEY = 'notion_task_cache_v1';
+const PROJ_CACHE_KEY = 'notion_proj_cache_v1';
+const MAX_PAGES = 5;
+const DONE_WORDS = ['完了', '済', 'done', 'complete', 'completed', 'closed', '終了'];
+const DONE_VALUE = '完了';
+const OPEN_VALUE = '未着手';
+
+let tasks = [];
+let projMap = {};
+let currentTab = 'today';
+let fetchedAt = null;
+let loading = false;
+
+// ── 起動 ──────────────────────────────
+function init() {
+  showDate();
+  document.getElementById('cfg-task').value = CONFIG.taskDb;
+  document.getElementById('cfg-proj').value = CONFIG.projDb;
+
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (c) { tasks = c.tasks || []; fetchedAt = c.at; }
+    projMap = JSON.parse(localStorage.getItem(PROJ_CACHE_KEY) || '{}');
+  } catch (e) {}
+
+  renderTabs();
+  render();
+  updateSync();
+
+  if (!CONFIG.taskDb) togglePanel();
+  else refresh();
+}
+
+function showDate() {
+  const d = new Date();
+  const w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+  document.getElementById('date').innerHTML =
+    `${d.getMonth() + 1}月${d.getDate()}日<span class="weekday">${w}曜日</span>`;
+}
+
+// ── 取得 ──────────────────────────────
+async function refresh() {
+  if (loading) return;
+  if (!CONFIG.taskDb) {
+    toast('タスクDB IDが未設定です。設定から入力してください', true);
+    if (!document.getElementById('panel').classList.contains('open')) togglePanel();
+    return;
+  }
+
+  loading = true;
+  document.getElementById('refresh').disabled = true;
+  updateSync();
+
+  try {
+    tasks = (await queryDb(CONFIG.taskDb)).map(toTask);
+
+    if (CONFIG.projDb && !Object.keys(projMap).length) {
+      try {
+        projMap = {};
+        (await queryDb(CONFIG.projDb)).forEach(p => { projMap[p.id] = titleOf(p) || ''; });
+        localStorage.setItem(PROJ_CACHE_KEY, JSON.stringify(projMap));
+      } catch (e) {}
+    }
+
+    fetchedAt = Date.now();
+    save();
+    renderTabs();
+    render();
+  } catch (e) {
+    toast('読み込めませんでした。' + e.message, true);
+  }
+
+  loading = false;
+  document.getElementById('refresh').disabled = false;
+  updateSync();
+}
+
+async function queryDb(dbId) {
+  let out = [], cursor;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const body = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+    const res = await notionRequest(`/v1/databases/${dbId}/query`, 'POST', body);
+    out = out.concat(res.results || []);
+    if (!res.has_more) break;
+    cursor = res.next_cursor;
+  }
+  return out;
+}
+
+async function notionRequest(path, method, body) {
+  // ヘッダは Content-Type のみ。Worker の Access-Control-Allow-Headers に
+  // 合わせているため、独自ヘッダを足すとプリフライトで弾かれる。
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+
+  const res = await fetch(CONFIG.workerUrl + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── ページ変換 ────────────────────────
+function titleOf(page) {
+  const props = page.properties || {};
+  for (const k in props) {
+    if (props[k]?.type === 'title') return (props[k].title || []).map(t => t.plain_text).join('');
+  }
+  return '';
+}
+
+function toTask(page) {
+  const props = page.properties || {};
+  let due = null, projIds = [], done = false, doneProp = null, doneType = null;
+
+  for (const k in props) {
+    const p = props[k];
+    if (!p) continue;
+    if (p.type === 'date' && !due && p.date?.start) due = p.date.start;
+    if (p.type === 'relation' && !projIds.length) projIds = (p.relation || []).map(r => r.id);
+
+    if (!doneProp) {
+      if (p.type === 'checkbox') {
+        doneProp = k; doneType = 'checkbox'; done = !!p.checkbox;
+      } else if (p.type === 'status' || p.type === 'select') {
+        const v = p[p.type]?.name || '';
+        if (v) {
+          doneProp = k; doneType = p.type;
+          done = DONE_WORDS.some(w => v.toLowerCase().includes(w));
+        }
+      }
+    }
+  }
+  return { id: page.id, name: titleOf(page) || '（無題）', due, projIds, done, doneProp, doneType };
+}
+
+// ── 日付 ──────────────────────────────
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function daysOut(s) {
+  if (!s) return null;
+  return Math.round((new Date(s.slice(0, 10) + 'T00:00:00') - new Date(todayStr() + 'T00:00:00')) / 86400000);
+}
+
+function urgencyOf(s) {
+  const n = daysOut(s);
+  if (n === null) return 'none';
+  if (n < 0) return 'overdue';
+  if (n === 0) return 'today';
+  if (n <= 7) return 'week';
+  return 'later';
+}
+
+function whenText(s) {
+  const n = daysOut(s);
+  if (n === null) return '';
+  const md = `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
+  if (n < 0) return `${md}・${-n}日超過`;
+  if (n === 0) return '今日';
+  if (n === 1) return '明日';
+  if (n <= 7) return `${md}・あと${n}日`;
+  return md;
+}
+
+// ── 表示 ──────────────────────────────
+const TABS = [
+  { id: 'today', label: '今日まで' },
+  { id: 'all', label: '未完了' },
+  { id: 'done', label: '完了' },
+];
+
+function open_() { return tasks.filter(t => !t.done); }
+
+function renderTabs() {
+  const n = {
+    today: open_().filter(t => t.due && daysOut(t.due) <= 0).length,
+    all: open_().length,
+    done: tasks.filter(t => t.done).length,
+  };
+  document.getElementById('tabs').innerHTML = TABS.map(t =>
+    `<button class="tab${t.id === currentTab ? ' active' : ''}" onclick="setTab('${t.id}')">${t.label}<span class="n">${n[t.id]}</span></button>`
+  ).join('');
+}
+
+function setTab(id) { currentTab = id; renderTabs(); render(); }
+
+function projName(t) {
+  for (const id of t.projIds) if (projMap[id]) return projMap[id];
+  return '';
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function render() {
+  const q = document.getElementById('filter').value.trim().toLowerCase();
+  let list = currentTab === 'done' ? tasks.filter(t => t.done) : open_();
+
+  if (currentTab === 'today') list = list.filter(t => t.due && daysOut(t.due) <= 0);
+  if (q) list = list.filter(t => (t.name + ' ' + projName(t)).toLowerCase().includes(q));
+
+  list.sort((a, b) => {
+    if (a.due && b.due) return a.due.localeCompare(b.due);
+    if (a.due) return -1;
+    if (b.due) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const el = document.getElementById('list');
+
+  if (!list.length) { el.innerHTML = emptyHtml(q); return; }
+
+  if (currentTab === 'done') {
+    el.innerHTML = `<div class="group">${list.slice(0, 50).map(rowHtml).join('')}</div>`;
+    return;
+  }
+
+  const GROUPS = [
+    { u: 'overdue', label: '期限切れ' },
+    { u: 'today', label: '今日' },
+    { u: 'week', label: '今週' },
+    { u: 'later', label: 'それ以降' },
+    { u: 'none', label: '期日なし' },
+  ];
+
+  el.innerHTML = GROUPS.map(g => {
+    const items = list.filter(t => urgencyOf(t.due) === g.u);
+    if (!items.length) return '';
+    return `<section class="group">
+      <div class="group-label" data-u="${g.u}">${g.label}<span class="n">${items.length}</span></div>
+      ${items.map(rowHtml).join('')}
+    </section>`;
+  }).join('');
+}
+
+function rowHtml(t) {
+  const u = urgencyOf(t.due);
+  const when = whenText(t.due);
+  const pn = projName(t);
+
+  // タスク名が「案件名 / 内容」形式なら、案件名の重複を落とす
+  let name = t.name;
+  if (pn && name.startsWith(pn + ' / ')) name = name.slice(pn.length + 3);
+
+  const meta = [];
+  if (pn) meta.push(`<span class="proj">${esc(pn)}</span>`);
+  if (when) meta.push(`<span class="when" data-u="${u}">${esc(when)}</span>`);
+
+  return `<div class="row${t.done ? ' done' : ''}" data-u="${t.done ? 'none' : u}" id="row-${t.id}">
+    <button class="tick${t.done ? ' on' : ''}" onclick="toggleDone('${t.id}')" aria-label="${t.done ? '未完了に戻す' : '完了にする'}"></button>
+    <div class="row-main">
+      <div class="row-title">${esc(name)}</div>
+      ${meta.length ? `<div class="row-meta">${meta.join('<span class="dot"></span>')}</div>` : ''}
+    </div>
+    <a class="open" href="https://www.notion.so/${t.id.replace(/-/g, '')}" target="_blank" rel="noopener" aria-label="Notionで開く">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7M13 3L4 12"/></svg>
+    </a>
+  </div>`;
+}
+
+function emptyHtml(q) {
+  if (q) return `<div class="empty"><b>該当なし</b>別の言葉で探すか、検索欄を空にしてください。</div>`;
+  if (!CONFIG.taskDb) return `<div class="empty"><b>まだ接続されていません</b>右上の設定から、データベースIDを入力してください。</div>`;
+  if (currentTab === 'today') return `<div class="empty"><b>今日ぶんは片づいています</b>先の予定は「未完了」タブで確認できます。</div>`;
+  if (currentTab === 'done') return `<div class="empty"><b>完了したタスクはまだありません</b>丸をタップすると、ここに移動します。</div>`;
+  return `<div class="empty"><b>未完了のタスクはありません</b></div>`;
+}
+
+// ── 完了操作 ──────────────────────────
+async function toggleDone(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+
+  if (!t.doneProp) { toast('完了に使えるプロパティが見つかりません', true); return; }
+
+  const before = t.done;
+  t.done = !before;
+
+  const row = document.getElementById('row-' + id);
+  if (row) row.classList.add('leaving');
+  setTimeout(() => { renderTabs(); render(); }, 220);
+
+  try {
+    const value = t.doneType === 'checkbox'
+      ? { checkbox: t.done }
+      : { [t.doneType]: { name: t.done ? DONE_VALUE : OPEN_VALUE } };
+    await notionRequest(`/v1/pages/${id}`, 'PATCH', { properties: { [t.doneProp]: value } });
+    save();
+  } catch (e) {
+    t.done = before;
+    renderTabs(); render();
+    toast('Notionに反映できませんでした。' + e.message, true);
+  }
+}
+
+// ── 補助 ──────────────────────────────
+function save() {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ tasks, at: fetchedAt })); } catch (e) {}
+}
+
+function updateSync() {
+  const el = document.getElementById('sync');
+  if (loading) { el.textContent = '更新中'; return; }
+  if (!fetchedAt) { el.textContent = '未取得'; return; }
+  const m = Math.floor((Date.now() - fetchedAt) / 60000);
+  el.textContent = m < 1 ? 'たった今' : m < 60 ? `${m}分前` : `${Math.floor(m / 60)}時間前`;
+}
+setInterval(updateSync, 60000);
+
+function togglePanel() {
+  document.getElementById('panel').classList.toggle('open');
+}
+
+function saveConfig() {
+  CONFIG.taskDb = document.getElementById('cfg-task').value.trim();
+  CONFIG.projDb = document.getElementById('cfg-proj').value.trim();
+  localStorage.setItem('notion_task_db', CONFIG.taskDb);
+  localStorage.setItem('notion_proj_db', CONFIG.projDb);
+  localStorage.removeItem(PROJ_CACHE_KEY);
+  projMap = {};
+  togglePanel();
+  refresh();
+}
+
+let toastTimer;
+function toast(msg, bad = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast' + (bad ? ' bad' : ''); }, 4000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
