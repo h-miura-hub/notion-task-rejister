@@ -10,7 +10,7 @@
 <title>タスク</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --ink:      #061527;
@@ -52,11 +52,7 @@
 
   button, input { font-family: inherit; }
 
-  :focus-visible {
-    outline: 2px solid var(--azure);
-    outline-offset: 2px;
-    border-radius: 3px;
-  }
+  :focus-visible { outline: 2px solid var(--azure); outline-offset: 2px; border-radius: 3px; }
 
   /* ── ヘッダー ───────────────────────── */
 
@@ -81,96 +77,59 @@
     padding: 18px 0 14px;
   }
 
-  .date {
-    font-size: 25px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1;
-  }
-
-  .date .weekday {
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--fg-2);
-    margin-left: 9px;
-    letter-spacing: 0;
-  }
+  .date { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .date .weekday { font-size: 15px; font-weight: 500; color: var(--fg-2); margin-left: 9px; letter-spacing: 0; }
 
   .top-actions {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    font-size: 12px;
-    color: var(--fg-3);
-    white-space: nowrap;
+    display: flex; align-items: center; gap: 14px;
+    font-size: 12px; color: var(--fg-3); white-space: nowrap;
   }
 
   .linkish {
-    background: none;
-    border: none;
-    padding: 4px 0;
-    font-size: 12px;
-    color: var(--fg-2);
-    cursor: pointer;
+    background: none; border: none; padding: 4px 0;
+    font-size: 12px; color: var(--fg-2); cursor: pointer;
   }
-
   .linkish:hover { color: var(--fg); }
   .linkish:disabled { color: var(--fg-3); cursor: default; }
 
   /* ── タブ ──────────────────────────── */
 
-  .tabs { display: flex; gap: 22px; }
+  .tabs {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
 
   .tab {
     position: relative;
-    background: none;
-    border: none;
+    flex-shrink: 0;
+    background: none; border: none;
     padding: 0 0 12px;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--fg-3);
-    cursor: pointer;
+    font-size: 14px; font-weight: 500;
+    color: var(--fg-3); cursor: pointer;
     transition: color 0.15s;
   }
-
   .tab:hover { color: var(--fg-2); }
-
   .tab.active { color: var(--fg); font-weight: 700; }
-
   .tab.active::after {
     content: '';
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: 2px;
-    background: var(--azure);
-    border-radius: 2px 2px 0 0;
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 2px; background: var(--azure); border-radius: 2px 2px 0 0;
   }
 
-  .tab .n {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--fg-3);
-    margin-left: 5px;
-  }
-
-  .tab.active .n { color: var(--azure); }
 
   /* ── 検索 ──────────────────────────── */
 
   .search {
-    width: 100%;
-    height: var(--tap);
-    margin: 16px 0 4px;
-    padding: 0 14px;
-    font-size: 14px;
-    color: var(--fg);
+    width: 100%; height: var(--tap);
+    margin: 16px 0 4px; padding: 0 14px;
+    font-size: 14px; color: var(--fg);
     background: var(--ink-1);
-    border: 1px solid var(--line-soft);
-    border-radius: 8px;
-    outline: none;
-    transition: border-color 0.15s;
+    border: 1px solid var(--line-soft); border-radius: 8px;
+    outline: none; transition: border-color 0.15s;
   }
-
   .search:focus { border-color: var(--line); }
   .search::placeholder { color: var(--fg-3); }
 
@@ -179,16 +138,10 @@
   .group { margin-top: 30px; }
 
   .group-label {
-    display: flex;
-    align-items: center;
-    gap: 9px;
+    display: flex; align-items: center; gap: 9px;
     margin-bottom: 4px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--fg-2);
+    font-size: 12px; font-weight: 700; color: var(--fg-2);
   }
-
-  .group-label .n { font-weight: 500; color: var(--fg-3); }
   .group-label[data-u="overdue"] { color: var(--ember); }
   .group-label[data-u="today"] { color: var(--azure); }
 
@@ -196,9 +149,7 @@
 
   .row {
     position: relative;
-    display: flex;
-    align-items: flex-start;
-    gap: 13px;
+    display: flex; align-items: flex-start; gap: 13px;
     padding: 15px 4px 15px 0;
     border-bottom: 1px solid var(--line-soft);
     transition: opacity 0.22s ease, transform 0.22s ease;
@@ -206,73 +157,42 @@
 
   .row::before {
     content: '';
-    position: absolute;
-    left: -20px;
-    top: 0; bottom: -1px;
-    width: 2px;
-    background: transparent;
+    position: absolute; left: -20px; top: 0; bottom: -1px;
+    width: 2px; background: transparent;
   }
-
   .row[data-u="overdue"]::before { background: var(--ember); }
   .row[data-u="today"]::before { background: var(--azure); }
 
   .row.leaving { opacity: 0; transform: translateX(20px); }
 
   .tick {
-    flex-shrink: 0;
-    position: relative;
-    width: 20px;
-    height: 20px;
-    margin-top: 2px;
+    flex-shrink: 0; position: relative;
+    width: 20px; height: 20px; margin-top: 2px;
     background: none;
-    border: 1.5px solid var(--fg-3);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
+    border: 1.5px solid var(--fg-3); border-radius: 50%;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
   }
-
   .tick:hover { border-color: var(--mint); }
-
   .tick.on { background: var(--mint); border-color: var(--mint); }
-
   .tick.on::after {
     content: '';
-    position: absolute;
-    left: 6px; top: 2.5px;
+    position: absolute; left: 6px; top: 2.5px;
     width: 4px; height: 9px;
-    border: solid var(--ink);
-    border-width: 0 2px 2px 0;
+    border: solid var(--ink); border-width: 0 2px 2px 0;
     transform: rotate(43deg);
   }
 
   .row-main { flex: 1; min-width: 0; }
 
-  .row-title {
-    font-size: 15px;
-    line-height: 1.55;
-    letter-spacing: 0.005em;
-    word-break: break-word;
-  }
-
+  .row-title { font-size: 15px; line-height: 1.55; letter-spacing: 0.005em; word-break: break-word; }
   .row.done .row-title { color: var(--fg-3); text-decoration: line-through; }
 
   .row-meta {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 5px;
-    font-size: 12px;
-    color: var(--fg-3);
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-top: 5px; font-size: 12px; color: var(--fg-3);
   }
 
-  .proj {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--fg-2);
-  }
+  .proj { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
 
   .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--fg-3); opacity: 0.7; }
 
@@ -280,104 +200,71 @@
   .when[data-u="overdue"] { color: var(--ember); font-weight: 500; }
   .when[data-u="today"] { color: var(--azure); font-weight: 500; }
 
+  .clock { font-weight: 700; color: var(--fg); }
+
+  .limit { font-variant-numeric: tabular-nums; color: var(--fg-3); }
+  .limit[data-u="overdue"], .limit[data-u="today"] { color: var(--ember); }
+  .limit .cap { color: var(--fg-3); margin-right: 3px; font-weight: 500; }
+
   .open {
     flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 26px;
-    margin: -2px -6px 0 0;
-    color: var(--fg-3);
-    transition: color 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 26px; margin: -2px -6px 0 0;
+    color: var(--fg-3); transition: color 0.15s;
   }
-
   .open:hover { color: var(--azure); }
   .open svg { width: 14px; height: 14px; }
 
   /* ── 空・設定・通知 ────────────────── */
 
-  .empty {
-    padding: 64px 8px;
-    font-size: 14px;
-    line-height: 2;
-    color: var(--fg-3);
-  }
-
+  .empty { padding: 64px 8px; font-size: 14px; line-height: 2; color: var(--fg-3); }
   .empty b { display: block; color: var(--fg-2); font-weight: 500; margin-bottom: 4px; }
 
   .panel {
     display: none;
-    margin: 18px 0 4px;
-    padding: 20px;
+    margin: 18px 0 4px; padding: 20px;
     background: var(--ink-1);
-    border: 1px solid var(--line-soft);
-    border-radius: 10px;
+    border: 1px solid var(--line-soft); border-radius: 10px;
   }
-
   .panel.open { display: block; }
-
   .panel h2 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
-
   .panel p { font-size: 12px; line-height: 1.85; color: var(--fg-3); margin-bottom: 16px; }
 
   .field { margin-bottom: 14px; }
-
   .field label { display: block; font-size: 12px; color: var(--fg-2); margin-bottom: 6px; }
-
   .field input {
-    width: 100%;
-    height: var(--tap);
-    padding: 0 12px;
-    font-size: 13px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: var(--fg);
-    background: var(--ink-2);
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    outline: none;
+    width: 100%; height: var(--tap); padding: 0 12px;
+    font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--fg); background: var(--ink-2);
+    border: 1px solid var(--line); border-radius: 7px; outline: none;
   }
-
   .field input:focus { border-color: var(--azure); }
 
   .save {
-    height: var(--tap);
-    padding: 0 22px;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--ink);
-    background: var(--azure);
-    border: none;
-    border-radius: 7px;
-    cursor: pointer;
+    height: var(--tap); padding: 0 22px;
+    font-size: 14px; font-weight: 700;
+    color: var(--ink); background: var(--azure);
+    border: none; border-radius: 7px; cursor: pointer;
   }
-
   .save:hover { filter: brightness(1.08); }
 
   .toast {
-    position: fixed;
-    left: 50%;
+    position: fixed; left: 50%;
     bottom: calc(28px + env(safe-area-inset-bottom));
     transform: translate(-50%, 12px);
     max-width: min(420px, calc(100vw - 40px));
     padding: 13px 20px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--ink);
-    background: var(--fg);
+    font-size: 13px; line-height: 1.6;
+    color: var(--ink); background: var(--fg);
     border-radius: 9px;
-    opacity: 0;
-    pointer-events: none;
+    opacity: 0; pointer-events: none;
     transition: opacity 0.2s, transform 0.2s;
     z-index: 50;
   }
-
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast.bad { background: var(--ember); }
 
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; }
-  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
@@ -429,12 +316,19 @@ const CONFIG = {
   projDb: localStorage.getItem('notion_proj_db') || '',
 };
 
-const CACHE_KEY = 'notion_task_cache_v1';
-const PROJ_CACHE_KEY = 'notion_proj_cache_v1';
-const MAX_PAGES = 5;
+// Notion側のプロパティ名。DBの列名を変えたらここも変える。
+const PROP_RUN    = '実行日時';
+const PROP_LIMIT  = '本当の期限';
+const PROP_STATUS = 'ステータス';
+
+const DEADLINE_WINDOW = 14;              // 「締め切り」タブに出す日数
 const DONE_WORDS = ['完了', '済', 'done', 'complete', 'completed', 'closed', '終了'];
 const DONE_VALUE = '完了';
 const OPEN_VALUE = '未着手';
+
+const CACHE_KEY = 'notion_task_cache_v2';
+const PROJ_CACHE_KEY = 'notion_proj_cache_v1';
+const MAX_PAGES = 5;
 
 let tasks = [];
 let projMap = {};
@@ -542,29 +436,49 @@ function titleOf(page) {
   return '';
 }
 
+function dateOf(props, name) {
+  const p = props[name];
+  return (p && p.type === 'date' && p.date?.start) ? p.date.start : null;
+}
+
 function toTask(page) {
   const props = page.properties || {};
-  let due = null, projIds = [], done = false, doneProp = null, doneType = null;
 
+  const run   = dateOf(props, PROP_RUN);
+  const limit = dateOf(props, PROP_LIMIT);
+
+  let projIds = [];
   for (const k in props) {
-    const p = props[k];
-    if (!p) continue;
-    if (p.type === 'date' && !due && p.date?.start) due = p.date.start;
-    if (p.type === 'relation' && !projIds.length) projIds = (p.relation || []).map(r => r.id);
+    if (props[k]?.type === 'relation' && (props[k].relation || []).length) {
+      projIds = props[k].relation.map(r => r.id);
+      break;
+    }
+  }
 
-    if (!doneProp) {
-      if (p.type === 'checkbox') {
-        doneProp = k; doneType = 'checkbox'; done = !!p.checkbox;
-      } else if (p.type === 'status' || p.type === 'select') {
+  // 完了判定。ステータス列を優先し、無ければ最初のチェックボックス等を使う。
+  let done = false, doneProp = null, doneType = null;
+  const sp = props[PROP_STATUS];
+  if (sp && (sp.type === 'status' || sp.type === 'select')) {
+    doneProp = PROP_STATUS; doneType = sp.type;
+    done = isDoneValue(sp[sp.type]?.name || '');
+  } else {
+    for (const k in props) {
+      const p = props[k];
+      if (!p) continue;
+      if (p.type === 'checkbox') { doneProp = k; doneType = 'checkbox'; done = !!p.checkbox; break; }
+      if (p.type === 'status' || p.type === 'select') {
         const v = p[p.type]?.name || '';
-        if (v) {
-          doneProp = k; doneType = p.type;
-          done = DONE_WORDS.some(w => v.toLowerCase().includes(w));
-        }
+        if (v) { doneProp = k; doneType = p.type; done = isDoneValue(v); break; }
       }
     }
   }
-  return { id: page.id, name: titleOf(page) || '（無題）', due, projIds, done, doneProp, doneType };
+
+  return { id: page.id, name: titleOf(page) || '（無題）', run, limit, projIds, done, doneProp, doneType };
+}
+
+function isDoneValue(v) {
+  const s = String(v).toLowerCase();
+  return DONE_WORDS.some(w => s.includes(w));
 }
 
 // ── 日付 ──────────────────────────────
@@ -572,6 +486,9 @@ function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// 時刻まで入っているか（Notionは時刻ありのとき ISO に T が入る）
+function hasTime(s) { return !!s && s.length > 10 && s.includes('T'); }
 
 function daysOut(s) {
   if (!s) return null;
@@ -587,38 +504,79 @@ function urgencyOf(s) {
   return 'later';
 }
 
-function whenText(s) {
+function md(s) { return `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`; }
+
+function hm(s) {
+  const d = new Date(s);
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// 実行日時の表示
+function runText(s) {
+  if (!s) return '';
   const n = daysOut(s);
-  if (n === null) return '';
-  const md = `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
-  if (n < 0) return `${md}・${-n}日超過`;
+  if (hasTime(s)) {
+    const t = `<span class="clock">${hm(s)}</span>`;
+    return n === 0 ? t : `${md(s)} ${t}`;
+  }
   if (n === 0) return '今日';
+  if (n < 0) return `${md(s)}・${-n}日前`;
   if (n === 1) return '明日';
-  if (n <= 7) return `${md}・あと${n}日`;
-  return md;
+  return md(s);
+}
+
+// 本当の期限の表示
+function limitText(s) {
+  if (!s) return '';
+  const n = daysOut(s);
+  if (n < 0) return `${md(s)}・${-n}日超過`;
+  if (n === 0) return '今日が期限';
+  if (n === 1) return '明日が期限';
+  return `${md(s)}・あと${n}日`;
+}
+
+// ── 並び替え ──────────────────────────
+// 「今日まで」用。時刻ありを先に、時刻順。時刻なしはその後ろに日付順。
+function sortByRun(a, b) {
+  const at = hasTime(a.run), bt = hasTime(b.run);
+  if (at !== bt) return at ? -1 : 1;
+  if (at && bt) return new Date(a.run) - new Date(b.run);
+  const c = (a.run || '').localeCompare(b.run || '');
+  return c !== 0 ? c : a.name.localeCompare(b.name);
+}
+
+// 「締め切り」用。期限が近い順。
+function sortByLimit(a, b) {
+  const c = (a.limit || '').slice(0, 10).localeCompare((b.limit || '').slice(0, 10));
+  return c !== 0 ? c : sortByRun(a, b);
+}
+
+// ── 抽出 ──────────────────────────────
+function openTasks() { return tasks.filter(t => !t.done); }
+
+function todayList() {
+  return openTasks().filter(t => t.run && daysOut(t.run) <= 0).sort(sortByRun);
+}
+
+function limitList() {
+  return openTasks().filter(t => t.limit && daysOut(t.limit) <= DEADLINE_WINDOW).sort(sortByLimit);
 }
 
 // ── 表示 ──────────────────────────────
 const TABS = [
   { id: 'today', label: '今日まで' },
-  { id: 'all', label: '未完了' },
-  { id: 'done', label: '完了' },
+  { id: 'limit', label: '締め切り' },
+  { id: 'open',  label: '未完了' },
+  { id: 'done',  label: '完了' },
 ];
 
-function open_() { return tasks.filter(t => !t.done); }
-
 function renderTabs() {
-  const n = {
-    today: open_().filter(t => t.due && daysOut(t.due) <= 0).length,
-    all: open_().length,
-    done: tasks.filter(t => t.done).length,
-  };
   document.getElementById('tabs').innerHTML = TABS.map(t =>
-    `<button class="tab${t.id === currentTab ? ' active' : ''}" onclick="setTab('${t.id}')">${t.label}<span class="n">${n[t.id]}</span></button>`
+    `<button class="tab${t.id === currentTab ? ' active' : ''}" onclick="setTab('${t.id}')">${t.label}</button>`
   ).join('');
 }
 
-function setTab(id) { currentTab = id; renderTabs(); render(); }
+function setTab(id) { currentTab = id; renderTabs(); render(); window.scrollTo(0, 0); }
 
 function projName(t) {
   for (const id of t.projIds) if (projMap[id]) return projMap[id];
@@ -629,61 +587,101 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function matches(t, q) {
+  return !q || (t.name + ' ' + projName(t)).toLowerCase().includes(q);
+}
+
 function render() {
   const q = document.getElementById('filter').value.trim().toLowerCase();
-  let list = currentTab === 'done' ? tasks.filter(t => t.done) : open_();
-
-  if (currentTab === 'today') list = list.filter(t => t.due && daysOut(t.due) <= 0);
-  if (q) list = list.filter(t => (t.name + ' ' + projName(t)).toLowerCase().includes(q));
-
-  list.sort((a, b) => {
-    if (a.due && b.due) return a.due.localeCompare(b.due);
-    if (a.due) return -1;
-    if (b.due) return 1;
-    return a.name.localeCompare(b.name);
-  });
-
   const el = document.getElementById('list');
 
-  if (!list.length) { el.innerHTML = emptyHtml(q); return; }
-
-  if (currentTab === 'done') {
-    el.innerHTML = `<div class="group">${list.slice(0, 50).map(rowHtml).join('')}</div>`;
+  if (!CONFIG.taskDb) {
+    el.innerHTML = `<div class="empty"><b>まだ接続されていません</b>右上の設定から、データベースIDを入力してください。</div>`;
     return;
   }
 
-  const GROUPS = [
-    { u: 'overdue', label: '期限切れ' },
-    { u: 'today', label: '今日' },
-    { u: 'week', label: '今週' },
-    { u: 'later', label: 'それ以降' },
-    { u: 'none', label: '期日なし' },
-  ];
+  let html = '';
 
-  el.innerHTML = GROUPS.map(g => {
-    const items = list.filter(t => urgencyOf(t.due) === g.u);
-    if (!items.length) return '';
-    return `<section class="group">
-      <div class="group-label" data-u="${g.u}">${g.label}<span class="n">${items.length}</span></div>
-      ${items.map(rowHtml).join('')}
-    </section>`;
-  }).join('');
+  if (currentTab === 'today') {
+    const list = todayList().filter(t => matches(t, q));
+    if (!list.length) {
+      html = emptyHtml(q, '今日ぶんは片づいています', '「締め切り」タブで先の期限を確認できます。');
+    } else {
+      const timed = list.filter(t => hasTime(t.run));
+      const plain = list.filter(t => !hasTime(t.run));
+      if (timed.length && plain.length) {
+        html = section('時刻あり', timed, 'run')
+             + section('時刻の指定なし', plain, 'run');
+      } else {
+        html = `<section class="group">${list.map(t => rowHtml(t, 'run')).join('')}</section>`;
+      }
+    }
+
+  } else if (currentTab === 'limit') {
+    const list = limitList().filter(t => matches(t, q));
+    html = list.length
+      ? `<section class="group">${list.map(t => rowHtml(t, 'limit')).join('')}</section>`
+      : emptyHtml(q, `${DEADLINE_WINDOW}日以内の期限はありません`, '差し迫ったものはない状態です。');
+
+  } else if (currentTab === 'open') {
+    const list = openTasks().filter(t => matches(t, q)).sort(sortByRun);
+    if (!list.length) {
+      html = emptyHtml(q, '未完了のタスクはありません', '');
+    } else {
+      const G = [
+        { u: 'overdue', label: '実行日が過ぎている' },
+        { u: 'today', label: '今日' },
+        { u: 'week', label: '今週' },
+        { u: 'later', label: 'それ以降' },
+        { u: 'none', label: '実行日なし' },
+      ];
+      html = G.map(g => {
+        const items = list.filter(t => urgencyOf(t.run) === g.u);
+        return items.length ? section(g.label, items, 'run', g.u) : '';
+      }).join('');
+    }
+
+  } else {
+    const list = tasks.filter(t => t.done && matches(t, q)).sort(sortByRun).slice(0, 50);
+    html = list.length
+      ? `<section class="group">${list.map(t => rowHtml(t, 'run')).join('')}</section>`
+      : emptyHtml(q, '完了したタスクはまだありません', '丸をタップすると、ここに移動します。');
+  }
+
+  el.innerHTML = html;
 }
 
-function rowHtml(t) {
-  const u = urgencyOf(t.due);
-  const when = whenText(t.due);
-  const pn = projName(t);
+function section(label, items, mode, u) {
+  return `<section class="group">
+    <div class="group-label"${u ? ` data-u="${u}"` : ''}>${label}</div>
+    ${items.map(t => rowHtml(t, mode)).join('')}
+  </section>`;
+}
 
-  // タスク名が「案件名 / 内容」形式なら、案件名の重複を落とす
+function rowHtml(t, mode) {
+  // 行の左罫は、そのタブで見ている日付の切迫度で決める
+  const key = mode === 'limit' ? t.limit : t.run;
+  const u = t.done ? 'none' : urgencyOf(key);
+
+  const pn = projName(t);
   let name = t.name;
   if (pn && name.startsWith(pn + ' / ')) name = name.slice(pn.length + 3);
 
   const meta = [];
   if (pn) meta.push(`<span class="proj">${esc(pn)}</span>`);
-  if (when) meta.push(`<span class="when" data-u="${u}">${esc(when)}</span>`);
 
-  return `<div class="row${t.done ? ' done' : ''}" data-u="${t.done ? 'none' : u}" id="row-${t.id}">
+  if (mode === 'limit') {
+    meta.push(`<span class="when" data-u="${urgencyOf(t.limit)}">${limitText(t.limit)}</span>`);
+    if (t.run) meta.push(`<span class="limit"><span class="cap">実行</span>${runText(t.run)}</span>`);
+  } else {
+    if (t.run) meta.push(`<span class="when" data-u="${urgencyOf(t.run)}">${runText(t.run)}</span>`);
+    // 期限が2週間以内なら、実行日と一緒に見えるようにしておく
+    if (t.limit && daysOut(t.limit) <= DEADLINE_WINDOW) {
+      meta.push(`<span class="limit" data-u="${urgencyOf(t.limit)}"><span class="cap">期限</span>${md(t.limit)}</span>`);
+    }
+  }
+
+  return `<div class="row${t.done ? ' done' : ''}" data-u="${u}" id="row-${t.id}">
     <button class="tick${t.done ? ' on' : ''}" onclick="toggleDone('${t.id}')" aria-label="${t.done ? '未完了に戻す' : '完了にする'}"></button>
     <div class="row-main">
       <div class="row-title">${esc(name)}</div>
@@ -695,19 +693,15 @@ function rowHtml(t) {
   </div>`;
 }
 
-function emptyHtml(q) {
+function emptyHtml(q, head, sub) {
   if (q) return `<div class="empty"><b>該当なし</b>別の言葉で探すか、検索欄を空にしてください。</div>`;
-  if (!CONFIG.taskDb) return `<div class="empty"><b>まだ接続されていません</b>右上の設定から、データベースIDを入力してください。</div>`;
-  if (currentTab === 'today') return `<div class="empty"><b>今日ぶんは片づいています</b>先の予定は「未完了」タブで確認できます。</div>`;
-  if (currentTab === 'done') return `<div class="empty"><b>完了したタスクはまだありません</b>丸をタップすると、ここに移動します。</div>`;
-  return `<div class="empty"><b>未完了のタスクはありません</b></div>`;
+  return `<div class="empty"><b>${head}</b>${sub}</div>`;
 }
 
 // ── 完了操作 ──────────────────────────
 async function toggleDone(id) {
   const t = tasks.find(x => x.id === id);
   if (!t) return;
-
   if (!t.doneProp) { toast('完了に使えるプロパティが見つかりません', true); return; }
 
   const before = t.done;
@@ -744,9 +738,7 @@ function updateSync() {
 }
 setInterval(updateSync, 60000);
 
-function togglePanel() {
-  document.getElementById('panel').classList.toggle('open');
-}
+function togglePanel() { document.getElementById('panel').classList.toggle('open'); }
 
 function saveConfig() {
   CONFIG.taskDb = document.getElementById('cfg-task').value.trim();
