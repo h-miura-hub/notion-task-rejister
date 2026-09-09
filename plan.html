@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#061527">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="案件">
+<title>案件プランニング</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:      #061527;
+    --ink-1:    #0B2038;
+    --ink-2:    #112B49;
+    --line:     #17334F;
+    --line-soft:#102743;
+
+    --fg:       #EAF1F9;
+    --fg-2:     #92A9C4;
+    --fg-3:     #5D7593;
+
+    --azure:    #58A6FF;
+    --ember:    #FF8A5C;
+    --mint:     #4FD1A5;
+
+    --tap: 44px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--ink); }
+
+  body {
+    font-family: 'Zen Kaku Gothic New', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--ink); color: var(--fg);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    font-feature-settings: "palt" 1;
+  }
+
+  button, input { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--azure); outline-offset: 2px; border-radius: 3px; }
+
+  .wrap { max-width: 520px; margin: 0 auto; padding: 0 20px calc(56px + env(safe-area-inset-bottom)); }
+
+  /* ── ヘッダー ─────────────────────── */
+  .top {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(6,21,39,0.86);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    border-bottom: 1px solid var(--line-soft);
+    padding-top: env(safe-area-inset-top);
+  }
+  .top-inner {
+    max-width: 520px; margin: 0 auto; padding: 18px 20px 16px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  }
+  .title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .top-actions { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--fg-3); white-space: nowrap; }
+  .linkish { background: none; border: none; padding: 4px 0; font-size: 12px; color: var(--fg-2); cursor: pointer; }
+  .linkish:hover { color: var(--fg); }
+  .linkish:disabled { color: var(--fg-3); cursor: default; }
+
+  /* ── 進捗グループ ─────────────────── */
+  .stage { margin-top: 28px; }
+  .stage-label {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 2px;
+    font-size: 12px; font-weight: 700; color: var(--fg-2);
+  }
+  .stage-label::after { content: ''; flex: 1; height: 1px; background: var(--line-soft); }
+
+  /* ── 案件 ─────────────────────────── */
+  .proj { padding: 16px 0 14px; border-bottom: 1px solid var(--line-soft); }
+
+  .proj-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  }
+  .proj-name { font-size: 15px; font-weight: 700; line-height: 1.45; word-break: break-word; }
+
+  .next {
+    flex-shrink: 0; font-size: 12px; color: var(--fg-2);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .next .cap { color: var(--fg-3); margin-right: 4px; }
+  .next[data-u="overdue"] { color: var(--ember); font-weight: 500; }
+  .next[data-u="today"] { color: var(--azure); font-weight: 500; }
+  .next[data-u="none"] { color: var(--ember); }
+
+  /* ── タスク ───────────────────────── */
+  .tasks { margin-top: 9px; }
+
+  .task { display: flex; align-items: flex-start; gap: 9px; padding: 5px 0; font-size: 13px; }
+  .task.leaving { opacity: 0; transform: translateX(14px); transition: opacity .2s, transform .2s; }
+
+  .tick {
+    flex-shrink: 0; position: relative;
+    width: 16px; height: 16px; margin-top: 3px;
+    background: none; border: 1.5px solid var(--fg-3); border-radius: 50%;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .tick:hover { border-color: var(--mint); }
+  .tick.on { background: var(--mint); border-color: var(--mint); }
+  .tick.on::after {
+    content: ''; position: absolute; left: 4.5px; top: 1.5px;
+    width: 3.5px; height: 8px;
+    border: solid var(--ink); border-width: 0 2px 2px 0; transform: rotate(43deg);
+  }
+
+  .task-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+  .task-name { line-height: 1.5; color: var(--fg-2); word-break: break-word; }
+  .task-when { font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .task-when[data-u="overdue"] { color: var(--ember); }
+  .task-when[data-u="today"] { color: var(--azure); }
+  .task-when .cap { margin-right: 2px; }
+
+  .no-task { margin-top: 9px; font-size: 12px; color: var(--ember); }
+
+  /* ── 追加 ─────────────────────────── */
+  .add-open {
+    margin-top: 10px; padding: 5px 0;
+    background: none; border: none;
+    font-size: 12px; color: var(--fg-3); cursor: pointer;
+  }
+  .add-open:hover { color: var(--azure); }
+
+  .add { margin-top: 11px; padding: 14px; background: var(--ink-1); border-radius: 9px; }
+  .add input[type="text"] {
+    width: 100%; height: var(--tap); padding: 0 12px; margin-bottom: 9px;
+    font-size: 14px; color: var(--fg);
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 7px; outline: none;
+  }
+  .add input[type="text"]:focus { border-color: var(--azure); }
+  .add input[type="text"]::placeholder { color: var(--fg-3); }
+
+  .add-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .add-cell { flex: 1; min-width: 0; }
+  .add-cell label { display: block; font-size: 11px; color: var(--fg-3); margin-bottom: 4px; }
+  .add-cell input {
+    width: 100%; height: 38px; padding: 0 8px;
+    font-size: 13px; color: var(--fg);
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 7px; outline: none;
+  }
+  .add-cell input:focus { border-color: var(--azure); }
+
+  .add-actions { display: flex; gap: 8px; }
+  .add-go {
+    flex: 1; height: var(--tap);
+    font-size: 14px; font-weight: 700; color: var(--ink);
+    background: var(--azure); border: none; border-radius: 7px; cursor: pointer;
+  }
+  .add-go:hover { filter: brightness(1.08); }
+  .add-go:disabled { background: var(--fg-3); cursor: default; }
+  .add-cancel {
+    height: var(--tap); padding: 0 16px;
+    font-size: 13px; color: var(--fg-2);
+    background: none; border: 1px solid var(--line); border-radius: 7px; cursor: pointer;
+  }
+
+  /* ── 空・設定・通知 ───────────────── */
+  .empty { padding: 60px 8px; font-size: 14px; line-height: 2; color: var(--fg-3); }
+  .empty b { display: block; color: var(--fg-2); font-weight: 500; margin-bottom: 4px; }
+
+  .panel { display: none; margin: 18px 0 4px; padding: 20px; background: var(--ink-1); border: 1px solid var(--line-soft); border-radius: 10px; }
+  .panel.open { display: block; }
+  .panel h2 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .panel p { font-size: 12px; line-height: 1.85; color: var(--fg-3); margin-bottom: 16px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--fg-2); margin-bottom: 6px; }
+  .field input {
+    width: 100%; height: var(--tap); padding: 0 12px;
+    font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--fg); background: var(--ink-2);
+    border: 1px solid var(--line); border-radius: 7px; outline: none;
+  }
+  .save {
+    height: var(--tap); padding: 0 22px;
+    font-size: 14px; font-weight: 700; color: var(--ink);
+    background: var(--azure); border: none; border-radius: 7px; cursor: pointer;
+  }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom));
+    transform: translate(-50%, 12px);
+    max-width: min(420px, calc(100vw - 40px));
+    padding: 13px 20px; font-size: 13px; line-height: 1.6;
+    color: var(--ink); background: var(--fg); border-radius: 9px;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.bad { background: var(--ember); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="top-inner">
+    <div class="title">案件</div>
+    <div class="top-actions">
+      <span id="sync">読み込み中</span>
+      <button class="linkish" id="refresh" onclick="refresh()">更新</button>
+      <button class="linkish" onclick="togglePanel()">設定</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="panel" id="panel">
+    <h2>データベースの接続</h2>
+    <p>登録アプリと同じIDです。ホーム画面のアイコンから起動した場合は、この画面で改めて入力してください。</p>
+    <div class="field">
+      <label for="cfg-task">タスクDB ID</label>
+      <input id="cfg-task" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="cfg-proj">プロジェクトDB ID</label>
+      <input id="cfg-proj" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </div>
+    <button class="save" onclick="saveConfig()">保存して読み込む</button>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══ 設定 ══════════════════════════════
+const CONFIG = {
+  workerUrl: 'https://notion-proxy.h-miura.workers.dev',
+  taskDb: localStorage.getItem('notion_task_db') || '',
+  projDb: localStorage.getItem('notion_proj_db') || '',
+};
+
+// Notion側のプロパティ名
+const P_ACCEPTED = '受任案件';     // プロジェクト：チェックボックス
+const P_PSTATUS  = 'ステータス';   // プロジェクト：完了を除外する用
+const P_STAGE    = '進捗';         // プロジェクト：並べ替えの軸
+const P_NEXT     = '次回期日';     // プロジェクト：日付
+const P_RUN      = '実行日時';     // タスク
+const P_LIMIT    = '本当の期限';   // タスク
+const P_TSTATUS  = 'ステータス';   // タスク
+
+const DONE_WORDS = ['完了', '済', 'done', 'complete', 'completed', 'closed', '終了'];
+const NEW_STATUS = '未着手';
+const TZ = '+09:00';
+
+const CACHE_KEY = 'notion_plan_cache_v2';
+const MAX_PAGES = 5;
+
+let projects = [];
+let tasks = [];
+let stageOrder = [];
+let taskSchema = null;
+let addFor = null;        // 追加フォームを開いている案件ID
+let fetchedAt = null;
+let loading = false;
+
+// ══ 通信 ══════════════════════════════
+async function notionRequest(path, method, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(CONFIG.workerUrl + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function queryDb(dbId) {
+  let out = [], cursor;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const body = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+    const res = await notionRequest(`/v1/databases/${dbId}/query`, 'POST', body);
+    out = out.concat(res.results || []);
+    if (!res.has_more) break;
+    cursor = res.next_cursor;
+  }
+  return out;
+}
+
+// ══ 読み込み ══════════════════════════
+async function refresh() {
+  if (loading) return;
+  if (!CONFIG.taskDb || !CONFIG.projDb) {
+    toast('DB IDが未設定です。設定から入力してください', true);
+    if (!document.getElementById('panel').classList.contains('open')) togglePanel();
+    return;
+  }
+
+  loading = true;
+  document.getElementById('refresh').disabled = true;
+  updateSync();
+
+  try {
+    // 進捗の並び順は、DBの定義から取る。Notion側で選択肢を並べ替えれば表示も追随する。
+    const projSchema = await notionRequest(`/v1/databases/${CONFIG.projDb}`, 'GET');
+    stageOrder = optionsOf(projSchema.properties?.[P_STAGE]);
+    taskSchema = (await notionRequest(`/v1/databases/${CONFIG.taskDb}`, 'GET')).properties || {};
+
+    const [projPages, taskPages] = await Promise.all([
+      queryDb(CONFIG.projDb),
+      queryDb(CONFIG.taskDb),
+    ]);
+
+    projects = projPages.map(toProject);
+    tasks = taskPages.map(toTask);
+
+    fetchedAt = Date.now();
+    save();
+    render();
+  } catch (e) {
+    toast('読み込めませんでした。' + e.message, true);
+  }
+
+  loading = false;
+  document.getElementById('refresh').disabled = false;
+  updateSync();
+}
+
+function optionsOf(prop) {
+  if (!prop) return [];
+  const o = prop.type === 'status' ? prop.status?.options
+          : prop.type === 'select' ? prop.select?.options : null;
+  return (o || []).map(x => x.name);
+}
+
+// ══ 変換 ══════════════════════════════
+function titleOf(page) {
+  const props = page.properties || {};
+  for (const k in props) {
+    if (props[k]?.type === 'title') return (props[k].title || []).map(t => t.plain_text).join('');
+  }
+  return '';
+}
+
+function dateOf(props, name) {
+  const p = props[name];
+  return (p && p.type === 'date' && p.date?.start) ? p.date.start : null;
+}
+
+function pickName(props, name) {
+  const p = props[name];
+  if (!p) return '';
+  if (p.type === 'status') return p.status?.name || '';
+  if (p.type === 'select') return p.select?.name || '';
+  return '';
+}
+
+function isDoneValue(v) {
+  const s = String(v).toLowerCase();
+  return !!v && DONE_WORDS.some(w => s.includes(w));
+}
+
+function toProject(page) {
+  const props = page.properties || {};
+  return {
+    id: page.id,
+    name: titleOf(page) || '（名称なし）',
+    accepted: props[P_ACCEPTED]?.type === 'checkbox' ? !!props[P_ACCEPTED].checkbox : false,
+    status: pickName(props, P_PSTATUS),
+    stage: pickName(props, P_STAGE),
+    next: dateOf(props, P_NEXT),
+  };
+}
+
+function toTask(page) {
+  const props = page.properties || {};
+  let projIds = [];
+  for (const k in props) {
+    if (props[k]?.type === 'relation' && (props[k].relation || []).length) {
+      projIds = props[k].relation.map(r => r.id);
+      break;
+    }
+  }
+  const st = props[P_TSTATUS];
+  const statusName = st ? (st.status?.name || st.select?.name || '') : '';
+  let doneProp = null, doneType = null;
+  if (st && (st.type === 'status' || st.type === 'select')) { doneProp = P_TSTATUS; doneType = st.type; }
+
+  return {
+    id: page.id,
+    name: titleOf(page) || '（無題）',
+    run: dateOf(props, P_RUN),
+    limit: dateOf(props, P_LIMIT),
+    projIds, done: isDoneValue(statusName), doneProp, doneType,
+  };
+}
+
+// ══ 日付 ══════════════════════════════
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function hasTime(s) { return !!s && s.length > 10 && s.includes('T'); }
+function daysOut(s) {
+  if (!s) return null;
+  return Math.round((new Date(s.slice(0,10)+'T00:00:00') - new Date(todayStr()+'T00:00:00')) / 86400000);
+}
+function urgency(s) {
+  const n = daysOut(s);
+  if (n === null) return 'none';
+  if (n < 0) return 'overdue';
+  if (n === 0) return 'today';
+  return 'later';
+}
+function md(s) { return `${Number(s.slice(5,7))}/${Number(s.slice(8,10))}`; }
+function hm(s) { const d = new Date(s); return `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function dateText(s) {
+  if (!s) return '';
+  const n = daysOut(s);
+  const t = hasTime(s) ? ' ' + hm(s) : '';
+  if (n === 0) return '今日' + t;
+  if (n === 1) return '明日' + t;
+  if (n < 0) return `${md(s)}${t}・${-n}日前`;
+  return md(s) + t;
+}
+
+// ══ 組み立て ══════════════════════════
+function tasksOf(projId) {
+  return tasks.filter(t => !t.done && t.projIds.includes(projId)).sort((a, b) => {
+    if (!a.run !== !b.run) return a.run ? -1 : 1;
+    const at = hasTime(a.run), bt = hasTime(b.run);
+    if (at !== bt) return at ? -1 : 1;
+    return (a.run || '').localeCompare(b.run || '');
+  });
+}
+
+function activeProjects() {
+  return projects.filter(p => p.accepted && !isDoneValue(p.status));
+}
+
+// 次回期日の早い順。未設定は最後にまわす。
+function byNext(a, b) {
+  if (!a.next !== !b.next) return a.next ? -1 : 1;
+  const c = (a.next || '').localeCompare(b.next || '');
+  return c !== 0 ? c : a.name.localeCompare(b.name);
+}
+
+function stageGroups() {
+  const list = activeProjects();
+  const seen = new Set(list.map(p => p.stage).filter(Boolean));
+  const ordered = stageOrder.filter(s => seen.has(s));
+  ordered.forEach(s => seen.delete(s));
+  const groups = [...ordered, ...seen].map(s => ({
+    label: s, items: list.filter(p => p.stage === s).sort(byNext),
+  }));
+  const blank = list.filter(p => !p.stage).sort(byNext);
+  if (blank.length) groups.push({ label: '進捗の未設定', items: blank });
+  return groups.filter(g => g.items.length);
+}
+
+// ══ 表示 ══════════════════════════════
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render() {
+  const el = document.getElementById('list');
+
+  if (!CONFIG.taskDb || !CONFIG.projDb) {
+    el.innerHTML = `<div class="empty"><b>まだ接続されていません</b>右上の設定から、2つのデータベースIDを入力してください。</div>`;
+    return;
+  }
+
+  const groups = stageGroups();
+  if (!groups.length) {
+    el.innerHTML = `<div class="empty"><b>対象の案件がありません</b>「受任案件」にチェックが入り、ステータスが完了でないものが並びます。</div>`;
+    return;
+  }
+
+  el.innerHTML = groups.map(g => `
+    <section class="stage">
+      <div class="stage-label">${esc(g.label)}</div>
+      ${g.items.map(projHtml).join('')}
+    </section>`).join('');
+}
+
+function projHtml(p) {
+  const ts = tasksOf(p.id);
+  const u = p.next ? urgency(p.next) : 'none';
+  const nextLabel = p.next ? dateText(p.next) : '未設定';
+
+  const taskRows = ts.length
+    ? `<div class="tasks">${ts.map(t => taskHtml(p, t)).join('')}</div>`
+    : `<div class="no-task">未完了のタスクがありません</div>`;
+
+  return `<div class="proj" id="p-${p.id}">
+    <div class="proj-head">
+      <div class="proj-name">${esc(p.name)}</div>
+      <div class="next" data-u="${u}"><span class="cap">次回</span>${esc(nextLabel)}</div>
+    </div>
+    ${taskRows}
+    ${addFor === p.id ? addHtml(p) : `<button class="add-open" onclick="openAdd('${p.id}')">＋ タスクを追加</button>`}
+  </div>`;
+}
+
+function taskHtml(p, t) {
+  let name = t.name;
+  if (name.startsWith(p.name + ' / ')) name = name.slice(p.name.length + 3);
+
+  const bits = [];
+  if (t.run) bits.push(`<span class="task-when" data-u="${urgency(t.run)}"><span class="cap">実行</span>${dateText(t.run)}</span>`);
+  if (t.limit) bits.push(`<span class="task-when" data-u="${urgency(t.limit)}"><span class="cap">期限</span>${dateText(t.limit)}</span>`);
+
+  return `<div class="task" id="t-${t.id}">
+    <button class="tick" onclick="completeTask('${t.id}')" aria-label="完了にする"></button>
+    <div class="task-main">
+      <span class="task-name">${esc(name)}</span>
+      ${bits.join('')}
+    </div>
+  </div>`;
+}
+
+function addHtml(p) {
+  return `<div class="add">
+    <input type="text" id="add-name" placeholder="次にやること" autocomplete="off">
+    <div class="add-row">
+      <div class="add-cell"><label for="add-date">実行日</label><input type="date" id="add-date" value="${todayStr()}"></div>
+      <div class="add-cell"><label for="add-time">時刻</label><input type="time" id="add-time"></div>
+      <div class="add-cell"><label for="add-limit">期限</label><input type="date" id="add-limit"></div>
+    </div>
+    <div class="add-actions">
+      <button class="add-go" id="add-go" onclick="addTask('${p.id}')">追加</button>
+      <button class="add-cancel" onclick="closeAdd()">やめる</button>
+    </div>
+  </div>`;
+}
+
+function openAdd(id) {
+  addFor = id;
+  render();
+  const el = document.getElementById('add-name');
+  if (el) { el.focus(); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+
+function closeAdd() { addFor = null; render(); }
+
+// ══ 追加 ══════════════════════════════
+async function addTask(projId) {
+  const p = projects.find(x => x.id === projId);
+  const name = document.getElementById('add-name').value.trim();
+  if (!name) { toast('内容を入力してください', true); return; }
+
+  const date = document.getElementById('add-date').value;
+  const time = document.getElementById('add-time').value;
+  const limit = document.getElementById('add-limit').value;
+
+  const btn = document.getElementById('add-go');
+  btn.disabled = true;
+  btn.textContent = '追加中...';
+
+  // タスクDBの実際の列構成を見て、存在する列にだけ値を入れる
+  const props = {};
+  let relDone = false;
+  for (const k in taskSchema) {
+    const type = taskSchema[k].type;
+    if (type === 'title') props[k] = { title: [{ text: { content: `${p.name} / ${name}` } }] };
+    else if (type === 'relation' && !relDone) { props[k] = { relation: [{ id: projId }] }; relDone = true; }
+  }
+  if (date && taskSchema[P_RUN]) props[P_RUN] = { date: { start: time ? `${date}T${time}:00${TZ}` : date } };
+  if (limit && taskSchema[P_LIMIT]) props[P_LIMIT] = { date: { start: limit } };
+  if (taskSchema[P_TSTATUS]) {
+    const t = taskSchema[P_TSTATUS].type;
+    if (t === 'status' || t === 'select') props[P_TSTATUS] = { [t]: { name: NEW_STATUS } };
+  }
+
+  try {
+    const page = await notionRequest('/v1/pages', 'POST', {
+      parent: { database_id: CONFIG.taskDb },
+      properties: props,
+    });
+    tasks.push(toTask(page));
+    addFor = null;
+    save();
+    render();
+    toast('追加しました');
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '追加';
+    toast('追加できませんでした。' + e.message, true);
+  }
+}
+
+// ══ 完了 ══════════════════════════════
+async function completeTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  if (!t.doneProp) { toast('ステータス列が見つかりません', true); return; }
+
+  t.done = true;
+  const row = document.getElementById('t-' + id);
+  if (row) row.classList.add('leaving');
+  setTimeout(render, 200);
+
+  try {
+    await notionRequest(`/v1/pages/${id}`, 'PATCH', {
+      properties: { [t.doneProp]: { [t.doneType]: { name: '完了' } } },
+    });
+    save();
+  } catch (e) {
+    t.done = false;
+    render();
+    toast('反映できませんでした。' + e.message, true);
+  }
+}
+
+// ══ 補助 ══════════════════════════════
+function save() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ projects, tasks, stageOrder, taskSchema, at: fetchedAt }));
+  } catch (e) {}
+}
+
+function updateSync() {
+  const el = document.getElementById('sync');
+  if (loading) { el.textContent = '更新中'; return; }
+  if (!fetchedAt) { el.textContent = '未取得'; return; }
+  const m = Math.floor((Date.now() - fetchedAt) / 60000);
+  el.textContent = m < 1 ? 'たった今' : m < 60 ? `${m}分前` : `${Math.floor(m/60)}時間前`;
+}
+setInterval(updateSync, 60000);
+
+function togglePanel() { document.getElementById('panel').classList.toggle('open'); }
+
+function saveConfig() {
+  CONFIG.taskDb = document.getElementById('cfg-task').value.trim();
+  CONFIG.projDb = document.getElementById('cfg-proj').value.trim();
+  localStorage.setItem('notion_task_db', CONFIG.taskDb);
+  localStorage.setItem('notion_proj_db', CONFIG.projDb);
+  togglePanel();
+  refresh();
+}
+
+let toastTimer;
+function toast(msg, bad = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast' + (bad ? ' bad' : ''); }, 4000);
+}
+
+function init() {
+  document.getElementById('cfg-task').value = CONFIG.taskDb;
+  document.getElementById('cfg-proj').value = CONFIG.projDb;
+
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (c) {
+      projects = c.projects || []; tasks = c.tasks || [];
+      stageOrder = c.stageOrder || []; taskSchema = c.taskSchema || null;
+      fetchedAt = c.at;
+    }
+  } catch (e) {}
+
+  render();
+  updateSync();
+
+  if (!CONFIG.taskDb || !CONFIG.projDb) togglePanel();
+  else refresh();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
