@@ -177,6 +177,15 @@
     color: var(--fg); background: var(--ink-2);
     border: 1px solid var(--line); border-radius: 7px; outline: none;
   }
+  .field input:focus { border-color: var(--azure); }
+  .field select {
+    width: 100%; height: var(--tap); padding: 0 10px;
+    font-size: 14px; color: var(--fg);
+    background: var(--ink-2); border: 1px solid var(--line);
+    border-radius: 7px; outline: none;
+  }
+  .field select:focus { border-color: var(--azure); }
+  .hint { margin-top: 7px; font-size: 11px; line-height: 1.7; color: var(--fg-3); }
   .save {
     height: var(--tap); padding: 0 22px;
     font-size: 14px; font-weight: 700; color: var(--ink);
@@ -223,6 +232,11 @@
       <label for="cfg-proj">プロジェクトDB ID</label>
       <input id="cfg-proj" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
+    <div class="field">
+      <label for="cfg-stage">区分けに使う列</label>
+      <select id="cfg-stage" onchange="setStageProp(this.value)"></select>
+      <div class="hint" id="stage-hint"></div>
+    </div>
     <button class="save" onclick="saveConfig()">保存して読み込む</button>
   </div>
 
@@ -242,7 +256,7 @@ const CONFIG = {
 // Notion側のプロパティ名
 const P_ACCEPTED = '受任案件';     // プロジェクト：チェックボックス
 const P_PSTATUS  = 'ステータス';   // プロジェクト：完了を除外する用
-const P_STAGE    = '進捗';         // プロジェクト：並べ替えの軸
+const P_STAGE_DEFAULT = '進捗';    // 区分けに使う列の初期候補（設定画面で変更できる）
 const P_NEXT     = '次回期日';     // プロジェクト：日付
 const P_RUN      = '実行日時';     // タスク
 const P_LIMIT    = '本当の期限';   // タスク
@@ -257,7 +271,9 @@ const MAX_PAGES = 5;
 
 let projects = [];
 let tasks = [];
-let stageOrder = [];
+let stageCandidates = [];   // プロジェクトDBにある選択肢型の列
+let stageProp = localStorage.getItem('notion_stage_prop') || '';
+let stageOrder = [];        // 選んだ列の選択肢を、Notionの定義順で保持する
 let taskSchema = null;
 let addFor = null;        // 追加フォームを開いている案件ID
 let fetchedAt = null;
@@ -302,9 +318,10 @@ async function refresh() {
   updateSync();
 
   try {
-    // 進捗の並び順は、DBの定義から取る。Notion側で選択肢を並べ替えれば表示も追随する。
+    // 区分けに使える列と、その選択肢の並び順をDBの定義から取る。
     const projSchema = await notionRequest(`/v1/databases/${CONFIG.projDb}`, 'GET');
-    stageOrder = optionsOf(projSchema.properties?.[P_STAGE]);
+    stageCandidates = candidatesOf(projSchema.properties || {});
+    resolveStageProp();
     taskSchema = (await notionRequest(`/v1/databases/${CONFIG.taskDb}`, 'GET')).properties || {};
 
     const [projPages, taskPages] = await Promise.all([
@@ -317,6 +334,7 @@ async function refresh() {
 
     fetchedAt = Date.now();
     save();
+    renderStageSelect();
     render();
   } catch (e) {
     toast('読み込めませんでした。' + e.message, true);
@@ -330,8 +348,30 @@ async function refresh() {
 function optionsOf(prop) {
   if (!prop) return [];
   const o = prop.type === 'status' ? prop.status?.options
-          : prop.type === 'select' ? prop.select?.options : null;
+          : prop.type === 'select' ? prop.select?.options
+          : prop.type === 'multi_select' ? prop.multi_select?.options : null;
   return (o || []).map(x => x.name);
+}
+
+// 区分けに使える列＝選択肢を持つ列。ステータス列（完了の判定用）は除く。
+function candidatesOf(props) {
+  const out = [];
+  for (const k in props) {
+    const t = props[k].type;
+    if (k === P_PSTATUS) continue;
+    if (t === 'status' || t === 'select' || t === 'multi_select') {
+      out.push({ name: k, type: t, options: optionsOf(props[k]) });
+    }
+  }
+  return out;
+}
+
+function resolveStageProp() {
+  const has = n => stageCandidates.some(c => c.name === n);
+  if (!has(stageProp)) {
+    stageProp = has(P_STAGE_DEFAULT) ? P_STAGE_DEFAULT : (stageCandidates[0]?.name || '');
+  }
+  stageOrder = stageCandidates.find(c => c.name === stageProp)?.options || [];
 }
 
 // ══ 変換 ══════════════════════════════
@@ -353,6 +393,7 @@ function pickName(props, name) {
   if (!p) return '';
   if (p.type === 'status') return p.status?.name || '';
   if (p.type === 'select') return p.select?.name || '';
+  if (p.type === 'multi_select') return p.multi_select?.[0]?.name || '';
   return '';
 }
 
@@ -363,12 +404,16 @@ function isDoneValue(v) {
 
 function toProject(page) {
   const props = page.properties || {};
+  // 区分け候補の列はすべて控えておく。設定で切り替えても取り直さずに済む。
+  const stages = {};
+  stageCandidates.forEach(c => { stages[c.name] = pickName(props, c.name); });
+
   return {
     id: page.id,
     name: titleOf(page) || '（名称なし）',
     accepted: props[P_ACCEPTED]?.type === 'checkbox' ? !!props[P_ACCEPTED].checkbox : false,
     status: pickName(props, P_PSTATUS),
-    stage: pickName(props, P_STAGE),
+    stages,
     next: dateOf(props, P_NEXT),
   };
 }
@@ -439,23 +484,21 @@ function activeProjects() {
   return projects.filter(p => p.accepted && !isDoneValue(p.status));
 }
 
-// 次回期日の早い順。未設定は最後にまわす。
-function byNext(a, b) {
-  if (!a.next !== !b.next) return a.next ? -1 : 1;
-  const c = (a.next || '').localeCompare(b.next || '');
-  return c !== 0 ? c : a.name.localeCompare(b.name);
-}
+// 案件名のあいうえお順
+function byName(a, b) { return a.name.localeCompare(b.name, 'ja'); }
+
+function stageOf(p) { return (p.stages || {})[stageProp] || ''; }
 
 function stageGroups() {
   const list = activeProjects();
-  const seen = new Set(list.map(p => p.stage).filter(Boolean));
+  const seen = new Set(list.map(stageOf).filter(Boolean));
   const ordered = stageOrder.filter(s => seen.has(s));
   ordered.forEach(s => seen.delete(s));
   const groups = [...ordered, ...seen].map(s => ({
-    label: s, items: list.filter(p => p.stage === s).sort(byNext),
+    label: s, items: list.filter(p => stageOf(p) === s).sort(byName),
   }));
-  const blank = list.filter(p => !p.stage).sort(byNext);
-  if (blank.length) groups.push({ label: '進捗の未設定', items: blank });
+  const blank = list.filter(p => !stageOf(p)).sort(byName);
+  if (blank.length) groups.push({ label: '未設定', items: blank });
   return groups.filter(g => g.items.length);
 }
 
@@ -617,7 +660,7 @@ async function completeTask(id) {
 // ══ 補助 ══════════════════════════════
 function save() {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ projects, tasks, stageOrder, taskSchema, at: fetchedAt }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ projects, tasks, stageCandidates, stageOrder, taskSchema, at: fetchedAt }));
   } catch (e) {}
 }
 
@@ -631,6 +674,34 @@ function updateSync() {
 setInterval(updateSync, 60000);
 
 function togglePanel() { document.getElementById('panel').classList.toggle('open'); }
+
+function renderStageSelect() {
+  const sel = document.getElementById('cfg-stage');
+  const hint = document.getElementById('stage-hint');
+
+  if (!stageCandidates.length) {
+    sel.innerHTML = `<option>読み込み後に選べます</option>`;
+    hint.textContent = '';
+    return;
+  }
+
+  sel.innerHTML = stageCandidates.map(c =>
+    `<option value="${c.name.replace(/"/g, '&quot;')}"${c.name === stageProp ? ' selected' : ''}>${c.name}</option>`
+  ).join('');
+
+  const cur = stageCandidates.find(c => c.name === stageProp);
+  hint.textContent = cur && cur.options.length
+    ? `選択肢: ${cur.options.join(' / ')}`
+    : '選択肢が見つかりません';
+}
+
+function setStageProp(name) {
+  stageProp = name;
+  localStorage.setItem('notion_stage_prop', name);
+  stageOrder = stageCandidates.find(c => c.name === name)?.options || [];
+  renderStageSelect();
+  render();
+}
 
 function saveConfig() {
   CONFIG.taskDb = document.getElementById('cfg-task').value.trim();
@@ -658,11 +729,13 @@ function init() {
     const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
     if (c) {
       projects = c.projects || []; tasks = c.tasks || [];
+      stageCandidates = c.stageCandidates || [];
       stageOrder = c.stageOrder || []; taskSchema = c.taskSchema || null;
       fetchedAt = c.at;
     }
   } catch (e) {}
 
+  renderStageSelect();
   render();
   updateSync();
 
