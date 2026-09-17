@@ -284,6 +284,7 @@ let tasks = [];
 let stageCandidates = [];   // プロジェクトDBにある選択肢型の列
 let tsCandidates = [];      // タスクDBにある、完了判定に使えそうな列
 let tsProp = localStorage.getItem('notion_task_status_prop') || '';
+let relProp = null;         // タスクDB側の「プロジェクト」列
 let stageProp = localStorage.getItem('notion_stage_prop') || '';
 let stageOrder = [];        // 選んだ列の選択肢を、Notionの定義順で保持する
 let taskSchema = null;
@@ -337,6 +338,7 @@ async function refresh() {
     taskSchema = (await notionRequest(`/v1/databases/${CONFIG.taskDb}`, 'GET')).properties || {};
     tsCandidates = taskCandidatesOf(taskSchema);
     resolveTsProp();
+    resolveRelProp();
 
     const [projPages, taskPages] = await Promise.all([
       queryDb(CONFIG.projDb),
@@ -440,6 +442,22 @@ function taskCandidatesOf(props) {
   return out;
 }
 
+// タスクDBのリレーション列のうち、プロジェクトDBを参照しているものを選ぶ。
+// 名前ではなく参照先で判断するので、関連づけの列が複数あっても取り違えない。
+function resolveRelProp() {
+  const want = (CONFIG.projDb || '').replace(/-/g, '');
+  let byId = null, byName = null, first = null;
+
+  for (const k in (taskSchema || {})) {
+    if (taskSchema[k].type !== 'relation') continue;
+    if (!first) first = k;
+    const dbid = (taskSchema[k].relation?.database_id || '').replace(/-/g, '');
+    if (want && dbid === want) byId = byId || k;
+    if (k === 'プロジェクト') byName = byName || k;
+  }
+  relProp = byId || byName || first || null;
+}
+
 function resolveTsProp() {
   const has = n => tsCandidates.some(c => c.name === n);
   if (!has(tsProp)) {
@@ -476,11 +494,16 @@ function toProject(page) {
 
 function toTask(page) {
   const props = page.properties || {};
+  // 案件の紐づけは、参照先で特定した列から読む
   let projIds = [];
-  for (const k in props) {
-    if (props[k]?.type === 'relation' && (props[k].relation || []).length) {
-      projIds = props[k].relation.map(r => r.id);
-      break;
+  if (relProp && props[relProp]?.type === 'relation') {
+    projIds = (props[relProp].relation || []).map(r => r.id);
+  } else {
+    for (const k in props) {
+      if (props[k]?.type === 'relation' && (props[k].relation || []).length) {
+        projIds = props[k].relation.map(r => r.id);
+        break;
+      }
     }
   }
   // 完了判定は、設定で選ばれた列で行う
@@ -667,18 +690,23 @@ async function addTask(projId) {
   const time = document.getElementById('add-time').value;
   const limit = document.getElementById('add-limit').value;
 
+  if (!relProp) {
+    toast('タスクDBに、プロジェクトDBを参照する関連づけの列が見つかりません', true);
+    return;
+  }
+
   const btn = document.getElementById('add-go');
   btn.disabled = true;
   btn.textContent = '追加中...';
 
   // タスクDBの実際の列構成を見て、存在する列にだけ値を入れる
   const props = {};
-  let relDone = false;
   for (const k in taskSchema) {
-    const type = taskSchema[k].type;
-    if (type === 'title') props[k] = { title: [{ text: { content: `${p.name} / ${name}` } }] };
-    else if (type === 'relation' && !relDone) { props[k] = { relation: [{ id: projId }] }; relDone = true; }
+    if (taskSchema[k].type === 'title') {
+      props[k] = { title: [{ text: { content: `${p.name} / ${name}` } }] };
+    }
   }
+  if (relProp) props[relProp] = { relation: [{ id: projId }] };
   if (date && taskSchema[P_RUN]) props[P_RUN] = { date: { start: time ? `${date}T${time}:00${TZ}` : date } };
   if (limit && taskSchema[P_LIMIT]) props[P_LIMIT] = { date: { start: limit } };
   if (tsProp && taskSchema[tsProp]) {
@@ -845,6 +873,7 @@ function init() {
       tsCandidates = c.tsCandidates || [];
       stageOrder = c.stageOrder || []; taskSchema = c.taskSchema || null;
       fetchedAt = c.at;
+      resolveRelProp();
     }
   } catch (e) {}
 
