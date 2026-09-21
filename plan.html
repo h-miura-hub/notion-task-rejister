@@ -42,7 +42,7 @@
     font-feature-settings: "palt" 1;
   }
 
-  button, input { font-family: inherit; }
+  button, input, select { font-family: inherit; }
   :focus-visible { outline: 2px solid var(--azure); outline-offset: 2px; border-radius: 3px; }
 
   .wrap { max-width: 520px; margin: 0 auto; padding: 0 20px calc(56px + env(safe-area-inset-bottom)); }
@@ -146,6 +146,19 @@
     background: var(--ink-2); border: 1px solid var(--line); border-radius: 7px; outline: none;
   }
   .add-cell input:focus { border-color: var(--azure); }
+
+  .add-cell select.add-select {
+    width: 100%; height: 38px; padding: 0 8px;
+    font-size: 13px; color: var(--fg);
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 7px; outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%2392A9C4' stroke-width='1.5' fill='none'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+  }
+  .add-cell select.add-select:focus { border-color: var(--azure); }
 
   .add-actions { display: flex; gap: 8px; }
   .add-go {
@@ -265,6 +278,15 @@ const P_STAGE_DEFAULT = '進捗';    // 区分けに使う列の初期候補（�
 const P_NEXT     = '次回期日';     // プロジェクト：日付
 const P_RUN      = '実行日時';     // タスク
 const P_LIMIT    = '本当の期限';   // タスク
+
+// 追加プロパティ（タスク）
+const P_TYPE     = '種別';         // タスク：重量級／連絡系
+const P_MINUTES  = '目安時間';     // タスク：目安時間
+const P_TARGET   = '相手';         // タスク：連絡相手
+
+// 目安時間のデフォルト値（未入力時）
+const DEFAULT_MINUTES = '10分';
+
 // 完了判定に使う列は設定画面で選ぶ（初期候補は「ステータス1」に近い名前）
 
 // 案件の並び順。ここに無い値は、この後ろにNotionの定義順で続く。
@@ -476,6 +498,18 @@ function statusOption(name, wanted, useDone) {
   return hit || opts[0];
 }
 
+// Select系プロパティの型に合わせた値を作る
+// 選択肢に無い値を送るとNotionがエラーを返すので、statusOption経由で安全化
+function selectValue(propName, value) {
+  const schema = taskSchema[propName];
+  if (!schema) return null;
+  const safe = statusOption(propName, value, false);
+  if (schema.type === 'status') return { status: { name: safe } };
+  if (schema.type === 'select') return { select: { name: safe } };
+  if (schema.type === 'multi_select') return { multi_select: [{ name: safe }] };
+  return null;
+}
+
 function toProject(page) {
   const props = page.properties || {};
   // 区分け候補の列はすべて控えておく。設定で切り替えても取り直さずに済む。
@@ -522,6 +556,10 @@ function toTask(page) {
     run: dateOf(props, P_RUN),
     limit: dateOf(props, P_LIMIT),
     projIds, done, doneProp, doneType,
+    // 後の処理（ダッシュボード等）で使えるよう保持
+    type: pickName(props, P_TYPE),
+    minutes: pickName(props, P_MINUTES),
+    target: pickName(props, P_TARGET),
   };
 }
 
@@ -656,6 +694,18 @@ function taskHtml(p, t) {
   </div>`;
 }
 
+// タスクDBのSelect列の選択肢からドロップダウンを生成する。
+// 選択肢が未読み込みの場合は空のselectを出す（Notion側でスキーマ変更されても壊れない）
+function selectHtml(id, propName, defaultValue) {
+  const opts = optionsOf(taskSchema?.[propName]);
+  const empty = `<option value="">—</option>`;
+  const items = opts.map(o => {
+    const sel = (defaultValue && o === defaultValue) ? ' selected' : '';
+    return `<option value="${esc(o)}"${sel}>${esc(o)}</option>`;
+  }).join('');
+  return `<select id="${id}" class="add-select">${empty}${items}</select>`;
+}
+
 function addHtml(p) {
   return `<div class="add">
     <input type="text" id="add-name" placeholder="次にやること" autocomplete="off">
@@ -663,6 +713,20 @@ function addHtml(p) {
       <div class="add-cell"><label for="add-date">実行日</label><input type="date" id="add-date" value="${todayStr()}"></div>
       <div class="add-cell"><label for="add-time">時刻</label><input type="time" id="add-time"></div>
       <div class="add-cell"><label for="add-limit">期限</label><input type="date" id="add-limit"></div>
+    </div>
+    <div class="add-row">
+      <div class="add-cell">
+        <label for="add-type">種別</label>
+        ${selectHtml('add-type', P_TYPE)}
+      </div>
+      <div class="add-cell">
+        <label for="add-minutes">目安時間</label>
+        ${selectHtml('add-minutes', P_MINUTES, DEFAULT_MINUTES)}
+      </div>
+      <div class="add-cell">
+        <label for="add-target">相手</label>
+        ${selectHtml('add-target', P_TARGET)}
+      </div>
     </div>
     <div class="add-actions">
       <button class="add-go" id="add-go" onclick="addTask('${p.id}')">追加</button>
@@ -715,6 +779,25 @@ async function addTask(projId) {
     if (t === 'status' || t === 'select') props[tsProp] = { [t]: { name: v } };
     else if (t === 'multi_select') props[tsProp] = { multi_select: [{ name: v }] };
     else if (t === 'checkbox') props[tsProp] = { checkbox: false };
+  }
+
+  // 追加：種別・目安時間・相手を、DBに列があれば入れる
+  const type    = document.getElementById('add-type')?.value || '';
+  const minutes = document.getElementById('add-minutes')?.value || DEFAULT_MINUTES;
+  const target  = document.getElementById('add-target')?.value || '';
+
+  if (type && taskSchema[P_TYPE]) {
+    const v = selectValue(P_TYPE, type);
+    if (v) props[P_TYPE] = v;
+  }
+  // 目安時間は未入力でもデフォルトが入る
+  if (minutes && taskSchema[P_MINUTES]) {
+    const v = selectValue(P_MINUTES, minutes);
+    if (v) props[P_MINUTES] = v;
+  }
+  if (target && taskSchema[P_TARGET]) {
+    const v = selectValue(P_TARGET, target);
+    if (v) props[P_TARGET] = v;
   }
 
   try {
