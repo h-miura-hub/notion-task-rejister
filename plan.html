@@ -290,7 +290,7 @@ const P_ACCEPTED = '受任案件';     // プロジェクト：チェックボ�
 const P_PSTATUS  = 'ステータス';   // プロジェクト：完了を除外する用
 const P_STAGE_DEFAULT = '進捗';    // 区分けに使う列の初期候補（設定画面で変更できる）
 const P_NEXT     = '次回期日';     // プロジェクト：日付
-const P_RUN      = '実行日時';     // タスク（保持はするが、このアプリでは触らない）
+const P_RUN      = '実行日時';     // タスク：実行予定日（この日が来るまで動けないタスク）
 const P_LIMIT    = '本当の期限';   // タスク
 
 // 追加プロパティ（タスク）
@@ -578,7 +578,7 @@ function toTask(page) {
   return {
     id: page.id,
     name: titleOf(page) || '（無題）',
-    run: dateOf(props, P_RUN),      // 保持はするが、このアプリでは表示・編集しない
+    run: dateOf(props, P_RUN),      // 実行予定日（着手可能日）。時刻は使わず、日付部分のみ扱う
     limit: dateOf(props, P_LIMIT),
     projIds, done, doneProp, doneType,
     // 後の処理（ダッシュボード等）で使えるよう保持
@@ -619,9 +619,16 @@ function dateText(s) {
 
 // ══ 組み立て ══════════════════════════
 function tasksOf(projId) {
-  // 実行日時での並び替えはやめ、期限順（未設定は後ろ）で表示する。
-  // 実行日時はUI上で扱わないので、並びの根拠に使うと直感と合わなくなる。
-  return tasks.filter(t => !t.done && t.projIds.includes(projId)).sort((a, b) => {
+  // 並びは期限順（未設定は後ろ）。実行予定日は「動けない日」を示すもので、
+  // 並び順の根拠には使わない。
+  // 実行予定日が未来のタスクは、まだ動けないので一覧からも隠す
+  // （登録は残っているが、UI上は今日以降のものだけ見えるようにする）。
+  const today = todayStr();
+  return tasks.filter(t => {
+    if (t.done || !t.projIds.includes(projId)) return false;
+    if (t.run && t.run.slice(0, 10) > today) return false;
+    return true;
+  }).sort((a, b) => {
     if (!a.limit !== !b.limit) return a.limit ? -1 : 1;
     return (a.limit || '').localeCompare(b.limit || '');
   });
@@ -746,13 +753,14 @@ function addHtml(p) {
   return `<div class="add">
     <input type="text" id="add-name" placeholder="次にやること" autocomplete="off">
     <div class="add-row">
+      <div class="add-cell"><label for="add-run">実行予定日</label><input type="date" id="add-run"></div>
       <div class="add-cell"><label for="add-limit">期限</label><input type="date" id="add-limit"></div>
+    </div>
+    <div class="add-row">
       <div class="add-cell">
         <label for="add-minutes">目安時間</label>
         ${selectHtml('add-minutes', P_MINUTES, DEFAULT_MINUTES)}
       </div>
-    </div>
-    <div class="add-row">
       <div class="add-cell">
         <label for="add-type">種別</label>
         ${selectHtml('add-type', P_TYPE)}
@@ -770,22 +778,24 @@ function addHtml(p) {
 }
 
 // 編集フォーム。追加フォームと同じ構造・同じ列で、既存値を初期表示する。
-// 「実行日時」は表示しない方針なので、既存値があってもUIには出さない（保持だけ）。
+// 実行予定日（P_RUN）は着手可能日として扱い、日付部分のみを編集対象にする。
 function editHtml(p, t) {
   let name = t.name;
   if (name.startsWith(p.name + ' / ')) name = name.slice(p.name.length + 3);
   const limitVal = t.limit ? t.limit.slice(0, 10) : '';
+  const runVal = t.run ? t.run.slice(0, 10) : '';
 
   return `<div class="add">
     <input type="text" id="edit-name" placeholder="内容" autocomplete="off" value="${esc(name)}">
     <div class="add-row">
+      <div class="add-cell"><label for="edit-run">実行予定日</label><input type="date" id="edit-run" value="${esc(runVal)}"></div>
       <div class="add-cell"><label for="edit-limit">期限</label><input type="date" id="edit-limit" value="${esc(limitVal)}"></div>
+    </div>
+    <div class="add-row">
       <div class="add-cell">
         <label for="edit-minutes">目安時間</label>
         ${selectHtml('edit-minutes', P_MINUTES, DEFAULT_MINUTES, t.minutes)}
       </div>
-    </div>
-    <div class="add-row">
       <div class="add-cell">
         <label for="edit-type">種別</label>
         ${selectHtml('edit-type', P_TYPE, null, t.type)}
@@ -829,6 +839,7 @@ async function addTask(projId) {
   const name = document.getElementById('add-name').value.trim();
   if (!name) { toast('内容を入力してください', true); return; }
 
+  const run = document.getElementById('add-run').value;
   const limit = document.getElementById('add-limit').value;
 
   if (!relProp) {
@@ -848,7 +859,8 @@ async function addTask(projId) {
     }
   }
   if (relProp) props[relProp] = { relation: [{ id: projId }] };
-  // 実行日時はこのアプリでは扱わない（P_RUNには何も入れない）
+  // 実行予定日（P_RUN）は日付のみで登録。時刻は使わない。
+  if (run && taskSchema[P_RUN]) props[P_RUN] = { date: { start: run } };
   if (limit && taskSchema[P_LIMIT]) props[P_LIMIT] = { date: { start: limit } };
   if (tsProp && taskSchema[tsProp]) {
     const t = taskSchema[tsProp].type;
@@ -903,6 +915,7 @@ async function saveEdit(taskId, projId) {
   const name = document.getElementById('edit-name').value.trim();
   if (!name) { toast('内容を入力してください', true); return; }
 
+  const run = document.getElementById('edit-run').value;
   const limit = document.getElementById('edit-limit').value;
   const type    = document.getElementById('edit-type')?.value || '';
   const minutes = document.getElementById('edit-minutes')?.value || '';
@@ -913,12 +926,16 @@ async function saveEdit(taskId, projId) {
   btn.textContent = '保存中...';
 
   // 変更するプロパティだけをまとめる。触っていない列は送らないので、
-  // このアプリで扱わない実行日時などが誤って書き換わることはない。
+  // このアプリで扱わない列が誤って書き換わることはない。
   const props = {};
   for (const k in taskSchema) {
     if (taskSchema[k].type === 'title') {
       props[k] = { title: [{ text: { content: `${p.name} / ${name}` } }] };
     }
+  }
+  // 実行予定日は日付のみで送信。空欄なら日付を削除する。
+  if (taskSchema[P_RUN]) {
+    props[P_RUN] = run ? { date: { start: run } } : { date: null };
   }
   if (taskSchema[P_LIMIT]) {
     props[P_LIMIT] = limit ? { date: { start: limit } } : { date: null };
