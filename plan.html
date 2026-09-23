@@ -112,7 +112,13 @@
   }
 
   .task-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
-  .task-name { line-height: 1.5; color: var(--fg-2); word-break: break-word; }
+  /* タスク名は編集を開くタップ領域も兼ねる */
+  .task-name {
+    line-height: 1.5; color: var(--fg-2); word-break: break-word;
+    background: none; border: none; padding: 0; text-align: left;
+    font: inherit; cursor: pointer;
+  }
+  .task-name:hover { color: var(--fg); }
   .task-when { font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .task-when[data-u="overdue"] { color: var(--ember); }
   .task-when[data-u="today"] { color: var(--azure); }
@@ -120,7 +126,7 @@
 
   .no-task { margin-top: 9px; font-size: 12px; color: var(--ember); }
 
-  /* ── 追加 ─────────────────────────── */
+  /* ── 追加 / 編集 ──────────────────── */
   .add-open {
     margin-top: 10px; padding: 5px 0;
     background: none; border: none;
@@ -160,7 +166,7 @@
   }
   .add-cell select.add-select:focus { border-color: var(--azure); }
 
-  .add-actions { display: flex; gap: 8px; }
+  .add-actions { display: flex; gap: 8px; align-items: center; }
   .add-go {
     flex: 1; height: var(--tap);
     font-size: 14px; font-weight: 700; color: var(--ink);
@@ -173,6 +179,14 @@
     font-size: 13px; color: var(--fg-2);
     background: none; border: 1px solid var(--line); border-radius: 7px; cursor: pointer;
   }
+  /* 編集モード時のみ表示する削除ボタン。誤タップを避けるため左端に離して配置。 */
+  .add-delete {
+    height: var(--tap); padding: 0 12px;
+    font-size: 12px; color: var(--ember);
+    background: none; border: 1px solid var(--line); border-radius: 7px; cursor: pointer;
+    margin-right: auto;
+  }
+  .add-delete:hover { border-color: var(--ember); }
 
   /* ── 空・設定・通知 ───────────────── */
   .empty { padding: 60px 8px; font-size: 14px; line-height: 2; color: var(--fg-3); }
@@ -276,7 +290,7 @@ const P_ACCEPTED = '受任案件';     // プロジェクト：チェックボ�
 const P_PSTATUS  = 'ステータス';   // プロジェクト：完了を除外する用
 const P_STAGE_DEFAULT = '進捗';    // 区分けに使う列の初期候補（設定画面で変更できる）
 const P_NEXT     = '次回期日';     // プロジェクト：日付
-const P_RUN      = '実行日時';     // タスク
+const P_RUN      = '実行日時';     // タスク（保持はするが、このアプリでは触らない）
 const P_LIMIT    = '本当の期限';   // タスク
 
 // 追加プロパティ（タスク）
@@ -310,7 +324,8 @@ let relProp = null;         // タスクDB側の「プロジェクト」列
 let stageProp = localStorage.getItem('notion_stage_prop') || '';
 let stageOrder = [];        // 選んだ列の選択肢を、Notionの定義順で保持する
 let taskSchema = null;
-let addFor = null;        // 追加フォームを開いている案件ID
+let addFor = null;          // 追加フォームを開いている案件ID
+let editFor = null;         // 編集フォームを開いているタスクID
 let fetchedAt = null;
 let loading = false;
 
@@ -510,6 +525,16 @@ function selectValue(propName, value) {
   return null;
 }
 
+// Select列の値をクリアする（"—"を選んだとき用）
+function clearSelectValue(propName) {
+  const schema = taskSchema[propName];
+  if (!schema) return null;
+  if (schema.type === 'status') return { status: null };
+  if (schema.type === 'select') return { select: null };
+  if (schema.type === 'multi_select') return { multi_select: [] };
+  return null;
+}
+
 function toProject(page) {
   const props = page.properties || {};
   // 区分け候補の列はすべて控えておく。設定で切り替えても取り直さずに済む。
@@ -553,7 +578,7 @@ function toTask(page) {
   return {
     id: page.id,
     name: titleOf(page) || '（無題）',
-    run: dateOf(props, P_RUN),
+    run: dateOf(props, P_RUN),      // 保持はするが、このアプリでは表示・編集しない
     limit: dateOf(props, P_LIMIT),
     projIds, done, doneProp, doneType,
     // 後の処理（ダッシュボード等）で使えるよう保持
@@ -594,11 +619,11 @@ function dateText(s) {
 
 // ══ 組み立て ══════════════════════════
 function tasksOf(projId) {
+  // 実行日時での並び替えはやめ、期限順（未設定は後ろ）で表示する。
+  // 実行日時はUI上で扱わないので、並びの根拠に使うと直感と合わなくなる。
   return tasks.filter(t => !t.done && t.projIds.includes(projId)).sort((a, b) => {
-    if (!a.run !== !b.run) return a.run ? -1 : 1;
-    const at = hasTime(a.run), bt = hasTime(b.run);
-    if (at !== bt) return at ? -1 : 1;
-    return (a.run || '').localeCompare(b.run || '');
+    if (!a.limit !== !b.limit) return a.limit ? -1 : 1;
+    return (a.limit || '').localeCompare(b.limit || '');
   });
 }
 
@@ -678,29 +703,40 @@ function projHtml(p) {
 }
 
 function taskHtml(p, t) {
+  // このタスクが編集モードならフォームを差し替えて描画する
+  if (editFor === t.id) return editHtml(p, t);
+
   let name = t.name;
   if (name.startsWith(p.name + ' / ')) name = name.slice(p.name.length + 3);
 
   const bits = [];
-  if (t.run) bits.push(`<span class="task-when" data-u="${urgency(t.run)}"><span class="cap">実行</span>${dateText(t.run)}</span>`);
+  // 実行日時はプレッシャーになるので表示しない（保持はするがUIに出さない）
   if (t.limit) bits.push(`<span class="task-when" data-u="${urgency(t.limit)}"><span class="cap">期限</span>${dateText(t.limit)}</span>`);
 
   return `<div class="task" id="t-${t.id}">
     <button class="tick" onclick="completeTask('${t.id}')" aria-label="完了にする"></button>
     <div class="task-main">
-      <span class="task-name">${esc(name)}</span>
+      <button type="button" class="task-name" onclick="openEdit('${t.id}')" title="タップで編集">${esc(name)}</button>
       ${bits.join('')}
     </div>
   </div>`;
 }
 
 // タスクDBのSelect列の選択肢からドロップダウンを生成する。
-// 選択肢が未読み込みの場合は空のselectを出す（Notion側でスキーマ変更されても壊れない）
-function selectHtml(id, propName, defaultValue) {
+// 選択肢が未読み込みの場合は空のselectを出す（Notion側でスキーマ変更されても壊れない）。
+// currentValue に既存値があればそれを選択済みにする（編集時に使う）。
+function selectHtml(id, propName, defaultValue, currentValue) {
   const opts = optionsOf(taskSchema?.[propName]);
-  const empty = `<option value="">—</option>`;
+  const chosen = currentValue !== undefined && currentValue !== null ? currentValue : '';
+  const emptySelected = !chosen ? ' selected' : '';
+  const empty = `<option value=""${emptySelected}>—</option>`;
   const items = opts.map(o => {
-    const sel = (defaultValue && o === defaultValue) ? ' selected' : '';
+    let sel = '';
+    if (chosen) {
+      if (o === chosen) sel = ' selected';
+    } else if (defaultValue && o === defaultValue) {
+      sel = ' selected';
+    }
     return `<option value="${esc(o)}"${sel}>${esc(o)}</option>`;
   }).join('');
   return `<select id="${id}" class="add-select">${empty}${items}</select>`;
@@ -710,18 +746,16 @@ function addHtml(p) {
   return `<div class="add">
     <input type="text" id="add-name" placeholder="次にやること" autocomplete="off">
     <div class="add-row">
-      <div class="add-cell"><label for="add-date">実行日</label><input type="date" id="add-date" value="${todayStr()}"></div>
-      <div class="add-cell"><label for="add-time">時刻</label><input type="time" id="add-time"></div>
       <div class="add-cell"><label for="add-limit">期限</label><input type="date" id="add-limit"></div>
+      <div class="add-cell">
+        <label for="add-minutes">目安時間</label>
+        ${selectHtml('add-minutes', P_MINUTES, DEFAULT_MINUTES)}
+      </div>
     </div>
     <div class="add-row">
       <div class="add-cell">
         <label for="add-type">種別</label>
         ${selectHtml('add-type', P_TYPE)}
-      </div>
-      <div class="add-cell">
-        <label for="add-minutes">目安時間</label>
-        ${selectHtml('add-minutes', P_MINUTES, DEFAULT_MINUTES)}
       </div>
       <div class="add-cell">
         <label for="add-target">相手</label>
@@ -735,8 +769,43 @@ function addHtml(p) {
   </div>`;
 }
 
+// 編集フォーム。追加フォームと同じ構造・同じ列で、既存値を初期表示する。
+// 「実行日時」は表示しない方針なので、既存値があってもUIには出さない（保持だけ）。
+function editHtml(p, t) {
+  let name = t.name;
+  if (name.startsWith(p.name + ' / ')) name = name.slice(p.name.length + 3);
+  const limitVal = t.limit ? t.limit.slice(0, 10) : '';
+
+  return `<div class="add">
+    <input type="text" id="edit-name" placeholder="内容" autocomplete="off" value="${esc(name)}">
+    <div class="add-row">
+      <div class="add-cell"><label for="edit-limit">期限</label><input type="date" id="edit-limit" value="${esc(limitVal)}"></div>
+      <div class="add-cell">
+        <label for="edit-minutes">目安時間</label>
+        ${selectHtml('edit-minutes', P_MINUTES, DEFAULT_MINUTES, t.minutes)}
+      </div>
+    </div>
+    <div class="add-row">
+      <div class="add-cell">
+        <label for="edit-type">種別</label>
+        ${selectHtml('edit-type', P_TYPE, null, t.type)}
+      </div>
+      <div class="add-cell">
+        <label for="edit-target">相手</label>
+        ${selectHtml('edit-target', P_TARGET, null, t.target)}
+      </div>
+    </div>
+    <div class="add-actions">
+      <button class="add-delete" onclick="deleteTask('${t.id}')" title="このタスクを削除">削除</button>
+      <button class="add-go" id="edit-go" onclick="saveEdit('${t.id}','${p.id}')">保存</button>
+      <button class="add-cancel" onclick="closeEdit()">やめる</button>
+    </div>
+  </div>`;
+}
+
 function openAdd(id) {
   addFor = id;
+  editFor = null;
   render();
   const el = document.getElementById('add-name');
   if (el) { el.focus(); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
@@ -744,14 +813,22 @@ function openAdd(id) {
 
 function closeAdd() { addFor = null; render(); }
 
+function openEdit(id) {
+  editFor = id;
+  addFor = null;
+  render();
+  const el = document.getElementById('edit-name');
+  if (el) { el.focus(); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+
+function closeEdit() { editFor = null; render(); }
+
 // ══ 追加 ══════════════════════════════
 async function addTask(projId) {
   const p = projects.find(x => x.id === projId);
   const name = document.getElementById('add-name').value.trim();
   if (!name) { toast('内容を入力してください', true); return; }
 
-  const date = document.getElementById('add-date').value;
-  const time = document.getElementById('add-time').value;
   const limit = document.getElementById('add-limit').value;
 
   if (!relProp) {
@@ -771,7 +848,7 @@ async function addTask(projId) {
     }
   }
   if (relProp) props[relProp] = { relation: [{ id: projId }] };
-  if (date && taskSchema[P_RUN]) props[P_RUN] = { date: { start: time ? `${date}T${time}:00${TZ}` : date } };
+  // 実行日時はこのアプリでは扱わない（P_RUNには何も入れない）
   if (limit && taskSchema[P_LIMIT]) props[P_LIMIT] = { date: { start: limit } };
   if (tsProp && taskSchema[tsProp]) {
     const t = taskSchema[tsProp].type;
@@ -814,6 +891,79 @@ async function addTask(projId) {
     btn.disabled = false;
     btn.textContent = '追加';
     toast('追加できませんでした。' + e.message, true);
+  }
+}
+
+// ══ 編集（既存タスクの更新） ══════════
+async function saveEdit(taskId, projId) {
+  const t = tasks.find(x => x.id === taskId);
+  const p = projects.find(x => x.id === projId);
+  if (!t || !p) { toast('タスクが見つかりません', true); return; }
+
+  const name = document.getElementById('edit-name').value.trim();
+  if (!name) { toast('内容を入力してください', true); return; }
+
+  const limit = document.getElementById('edit-limit').value;
+  const type    = document.getElementById('edit-type')?.value || '';
+  const minutes = document.getElementById('edit-minutes')?.value || '';
+  const target  = document.getElementById('edit-target')?.value || '';
+
+  const btn = document.getElementById('edit-go');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  // 変更するプロパティだけをまとめる。触っていない列は送らないので、
+  // このアプリで扱わない実行日時などが誤って書き換わることはない。
+  const props = {};
+  for (const k in taskSchema) {
+    if (taskSchema[k].type === 'title') {
+      props[k] = { title: [{ text: { content: `${p.name} / ${name}` } }] };
+    }
+  }
+  if (taskSchema[P_LIMIT]) {
+    props[P_LIMIT] = limit ? { date: { start: limit } } : { date: null };
+  }
+  if (taskSchema[P_TYPE]) {
+    const v = type ? selectValue(P_TYPE, type) : clearSelectValue(P_TYPE);
+    if (v) props[P_TYPE] = v;
+  }
+  if (taskSchema[P_MINUTES]) {
+    const v = minutes ? selectValue(P_MINUTES, minutes) : clearSelectValue(P_MINUTES);
+    if (v) props[P_MINUTES] = v;
+  }
+  if (taskSchema[P_TARGET]) {
+    const v = target ? selectValue(P_TARGET, target) : clearSelectValue(P_TARGET);
+    if (v) props[P_TARGET] = v;
+  }
+
+  try {
+    const page = await notionRequest(`/v1/pages/${taskId}`, 'PATCH', { properties: props });
+    // 手元のキャッシュも書き換えて、再取得を待たずに反映する
+    const idx = tasks.findIndex(x => x.id === taskId);
+    if (idx >= 0) tasks[idx] = toTask(page);
+    editFor = null;
+    save();
+    render();
+    toast('保存しました');
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '保存';
+    toast('保存できませんでした。' + e.message, true);
+  }
+}
+
+// タスクの削除（アーカイブ）。Notion APIではページのarchive=trueで実現する。
+async function deleteTask(taskId) {
+  if (!confirm('このタスクを削除します。よろしいですか？')) return;
+  try {
+    await notionRequest(`/v1/pages/${taskId}`, 'PATCH', { archived: true });
+    tasks = tasks.filter(t => t.id !== taskId);
+    editFor = null;
+    save();
+    render();
+    toast('削除しました');
+  } catch (e) {
+    toast('削除できませんでした。' + e.message, true);
   }
 }
 
