@@ -299,7 +299,10 @@ const P_MINUTES  = '目安時間';     // タスク：目安時間
 const P_TARGET   = '相手';         // タスク：連絡相手
 
 // 目安時間のデフォルト値（未入力時）
-const DEFAULT_MINUTES = '10分';
+// 原則は30分（連絡以外のタスクは最低これくらいの見積もり）、
+// 連絡業務を選んだ場合は10分（短い連絡が多いので）。
+const DEFAULT_MINUTES = '30分';
+const DEFAULT_MINUTES_CONTACT = '10分';
 
 // 完了判定に使う列は設定画面で選ぶ（初期候補は「ステータス1」に近い名前）
 
@@ -732,8 +735,11 @@ function taskHtml(p, t) {
 // タスクDBのSelect列の選択肢からドロップダウンを生成する。
 // 選択肢が未読み込みの場合は空のselectを出す（Notion側でスキーマ変更されても壊れない）。
 // currentValue に既存値があればそれを選択済みにする（編集時に使う）。
-function selectHtml(id, propName, defaultValue, currentValue) {
-  const opts = optionsOf(taskSchema?.[propName]);
+// filterFn が渡されたら、その関数が true を返す選択肢だけに絞る。
+// onChangeExpr が渡されたら、select要素の onchange として設定する。
+function selectHtml(id, propName, defaultValue, currentValue, filterFn, onChangeExpr) {
+  let opts = optionsOf(taskSchema?.[propName]);
+  if (filterFn) opts = opts.filter(filterFn);
   const chosen = currentValue !== undefined && currentValue !== null ? currentValue : '';
   const emptySelected = !chosen ? ' selected' : '';
   const empty = `<option value=""${emptySelected}>—</option>`;
@@ -746,10 +752,33 @@ function selectHtml(id, propName, defaultValue, currentValue) {
     }
     return `<option value="${esc(o)}"${sel}>${esc(o)}</option>`;
   }).join('');
-  return `<select id="${id}" class="add-select">${empty}${items}</select>`;
+  const onChangeAttr = onChangeExpr ? ` onchange="${onChangeExpr}"` : '';
+  return `<select id="${id}" class="add-select"${onChangeAttr}>${empty}${items}</select>`;
+}
+
+// 「連絡・」で始まる選択肢だけを残すフィルタ関数。
+// 種別ドロップダウンに渡すと、重量級など非連絡系の選択肢を隠せる。
+const CONTACT_ONLY = (o) => String(o).startsWith('連絡・');
+
+// 種別が「連絡・」系に切り替わったら目安時間を10分に、それ以外に戻ったら30分に揃える。
+// 既にユーザーが特定の時間を選んでいた場合でも、種別の性質に合わせて切り替える方が
+// 一度の操作で登録が終わるので、原則上書きする。
+function syncMinutesWithType(typeSelectId, minutesSelectId) {
+  const typeEl = document.getElementById(typeSelectId);
+  const minEl  = document.getElementById(minutesSelectId);
+  if (!typeEl || !minEl) return;
+  const isContact = String(typeEl.value || '').startsWith('連絡・');
+  const target = isContact ? DEFAULT_MINUTES_CONTACT : DEFAULT_MINUTES;
+  // 選択肢に対象の値があればセット、なければ最も近いものを探す
+  const opts = Array.from(minEl.options).map(o => o.value);
+  if (opts.includes(target)) {
+    minEl.value = target;
+  }
 }
 
 function addHtml(p) {
+  // 種別は「連絡・」系だけに絞る。
+  // 連絡以外の分類（重量級・ミドル・軽作業）は、目安時間から自動で判定される。
   return `<div class="add">
     <input type="text" id="add-name" placeholder="次にやること" autocomplete="off">
     <div class="add-row">
@@ -762,8 +791,8 @@ function addHtml(p) {
         ${selectHtml('add-minutes', P_MINUTES, DEFAULT_MINUTES)}
       </div>
       <div class="add-cell">
-        <label for="add-type">種別</label>
-        ${selectHtml('add-type', P_TYPE)}
+        <label for="add-type">連絡種別</label>
+        ${selectHtml('add-type', P_TYPE, null, null, CONTACT_ONLY, "syncMinutesWithType('add-type','add-minutes')")}
       </div>
       <div class="add-cell">
         <label for="add-target">相手</label>
@@ -785,6 +814,10 @@ function editHtml(p, t) {
   const limitVal = t.limit ? t.limit.slice(0, 10) : '';
   const runVal = t.run ? t.run.slice(0, 10) : '';
 
+  // 編集では、既存の種別が「連絡・」系以外（過去登録の「重量級」など）の
+  // 可能性もある。その値は選択肢から消えないようにフィルタを工夫する。
+  const typeFilter = (o) => CONTACT_ONLY(o) || o === t.type;
+
   return `<div class="add">
     <input type="text" id="edit-name" placeholder="内容" autocomplete="off" value="${esc(name)}">
     <div class="add-row">
@@ -797,8 +830,8 @@ function editHtml(p, t) {
         ${selectHtml('edit-minutes', P_MINUTES, DEFAULT_MINUTES, t.minutes)}
       </div>
       <div class="add-cell">
-        <label for="edit-type">種別</label>
-        ${selectHtml('edit-type', P_TYPE, null, t.type)}
+        <label for="edit-type">連絡種別</label>
+        ${selectHtml('edit-type', P_TYPE, null, t.type, typeFilter, "syncMinutesWithType('edit-type','edit-minutes')")}
       </div>
       <div class="add-cell">
         <label for="edit-target">相手</label>
