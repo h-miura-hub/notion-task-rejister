@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>今日のタスクボード</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <div>
+        <div class="eyebrow">DAILY TASK BOARD</div>
+        <h1>今日のタスク <span class="mini-star">✦</span></h1>
+      </div>
+      <div class="head-actions">
+        <span class="sync" id="syncStatus" aria-live="polite">未取得</span>
+        <button type="button" class="text-button" id="refresh" title="Notionから最新情報を取得">↻ 更新</button>
+        <button type="button" class="text-button" id="settingsButton" title="専用DBの設定">⚙</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <nav class="date-selector" aria-label="表示する日付">
+      <button class="date-arrow" id="prevDay" type="button" aria-label="前の日">‹</button>
+      <label class="date-center" for="targetDate">
+        <span id="dayLabel">—</span>
+        <input id="targetDate" type="date" aria-label="日付を選ぶ">
+      </label>
+      <button class="date-arrow" id="nextDay" type="button" aria-label="次の日">›</button>
+      <button class="today-button" type="button" id="todayButton">今日</button>
+    </nav>
+
+    <section class="summary" aria-label="タスク進捗">
+      <div class="summary-top">
+        <div class="summary-count"><span id="openCount">—</span><small>件 残り</small></div>
+        <div class="summary-side"><span id="doneCount">—</span>件 完了 <span class="separator">·</span> 残り <strong id="remainingMinutes">—</strong></div>
+      </div>
+      <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
+      <p class="summary-foot" id="progressLabel">朝決めたタスクを、日中ここで管理します。</p>
+    </section>
+
+    <section class="tasks-section">
+      <div class="section-head"><h2>これからやること</h2><span id="pendingLabel" class="subtle"></span></div>
+      <div id="taskList" class="task-list" aria-live="polite"></div>
+      <div class="empty" id="emptyState" hidden><div class="empty-icon">✓</div><strong>未完了タスクはありません</strong><p>朝のプランを取り込むか、タスクを追加してください。</p></div>
+    </section>
+
+    <form id="settingsPanel" class="editor" hidden>
+      <h3>専用Notion DBの接続</h3>
+      <p class="help">既存Cloudflare Workersを使用します。新しいWorkerの作成・変更は不要です。ここには「今日の実行タスク」専用DBのIDだけを入力してください。</p>
+      <label for="configDbId">専用DBのID <span class="required">*</span></label>
+      <input id="configDbId" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="32桁のNotion DB ID">
+      <label for="configMode">Notion APIの接続形式</label>
+      <select id="configMode"><option value="database">従来型：databases（既存アプリと同じ）</option><option value="data_source">新型：data_sources（Workerが対応する場合）</option></select>
+      <p class="help">使用するWorker: <span id="workerURL"></span>。この設定ではAPIトークンを入力・保存しません。</p>
+      <div class="edit-actions"><button type="button" class="ghost-button" id="cancelSettings">閉じる</button><button type="submit" class="primary-button" id="saveConfig">接続して保存</button></div>
+    </form>
+
+    <div class="quick-actions">
+      <button type="button" id="addToggle" class="primary-button"><span>＋</span> 急なタスクを追加</button>
+      <button type="button" id="importToggle" class="secondary-button" title="ChatGPTからコピーしたJSONの取り込み">⇩ 取込</button>
+    </div>
+
+    <form id="addForm" class="editor" hidden>
+      <h3>今日のタスクを追加</h3>
+      <label for="taskName">タスク名 <span class="required">*</span></label>
+      <input id="taskName" maxlength="160" required placeholder="例：弁護士会への報告">
+      <div class="two-cols">
+        <div><label for="caseName">案件名（任意）</label><input id="caseName" maxlength="100" placeholder="例：堀さん"></div>
+        <div><label for="minutes">所要時間（分）</label><input id="minutes" type="number" min="1" max="1440" placeholder="10"></div>
+      </div>
+      <label for="deadline">期限（任意）</label><input id="deadline" type="date">
+      <label for="note">メモ（任意）</label><input id="note" maxlength="300" placeholder="必要なら入力">
+      <div class="edit-actions"><button type="button" class="ghost-button" id="cancelAdd">やめる</button><button type="submit" class="primary-button" id="saveTask">追加する</button></div>
+    </form>
+
+    <section id="importPanel" class="editor" hidden>
+      <h3>ChatGPTのタスクを取り込む</h3>
+      <p class="help">ChatGPTのタスクJSONをコピーし、「クリップボードから取込」を押します。Macの設定で読み取りが制限される場合は下に貼り付けてください。同一日・同一元タスクID、または同一案件・同名の項目は重複登録を避けます。</p>
+      <button class="secondary-button full" id="importClipboard" type="button">クリップボードから取込</button>
+      <label for="importText">JSONを貼り付け</label>
+      <textarea id="importText" rows="5" placeholder='{"tasks":[{"name":"資料作成","executionDate":"2026-11-04","minutes":60,"caseName":"ESplanet"}]}'></textarea>
+      <div class="edit-actions"><button type="button" class="ghost-button" id="cancelImport">閉じる</button><button type="button" class="primary-button" id="importPaste">貼付内容を取込</button></div>
+    </section>
+
+    <section class="done-section">
+      <button id="doneToggle" type="button" class="section-head done-header" aria-expanded="false" aria-controls="doneList">
+        <h2>完了したこと <span id="doneHeaderCount" class="num-pill">0</span></h2><span id="doneChevron">⌄</span>
+      </button>
+      <div id="doneList" class="task-list" hidden></div>
+    </section>
+
+    <footer class="footer">
+      <button type="button" class="text-button" id="copyReport">進捗をコピー</button>
+      <p>既存タスクDB・GASダッシュボードには書き込みません。チェック結果は専用DBにのみ反映します。</p>
+    </footer>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
